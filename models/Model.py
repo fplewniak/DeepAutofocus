@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Net(nn.Module):
+    """
+    Class for simple neural network
+    """
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, 3, 1)
@@ -10,8 +13,12 @@ class Net(nn.Module):
         self.dropout = nn.Dropout(0.5)
         self.regression = nn.Linear(1600, 1)
 
-    # x represents our data
     def forward(self, x):
+        """
+        Forward loop
+        :param x: image data
+        :return: predicted delta z
+        """
         # Pass data through conv1
         x = self.conv1(x)
         # Use the rectified-linear activation function over x
