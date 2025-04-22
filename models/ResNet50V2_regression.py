@@ -15,7 +15,6 @@ class ResNetModel(nn.Module):
         self.fc = nn.Linear(2048, 1)  # BiLSTM output size = 2 * hidden_size
 
     def forward(self, x):
-        x, batch_size = self.folding(x)  # Fold sequence into batch form
         x = self.resnet(x)  # CNN Feature Extraction
         x = self.global_avg_pool(x)
         x = torch.flatten(x, start_dim=1)  # Flatten to (batch, features)
