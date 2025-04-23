@@ -3,16 +3,16 @@ import torch.nn as nn
 from torchvision import models
 
 
-class ResNetModel(nn.Module):
+class ResNet18Model(nn.Module):
     def __init__(self):
-        super(ResNetModel, self).__init__()
+        super(ResNet18Model, self).__init__()
 
         # Load ResNet50 (since PyTorch lacks ResNet50V2)
-        resnet = models.resnet50(pretrained=True)
+        resnet = models.resnet18(pretrained=True)
         self.resnet = nn.Sequential(*list(resnet.children())[:-2])  # Remove FC layer
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Equivalent to GlobalAveragePooling2D
         self.dropout = nn.Dropout(0.5)
-        self.fc = nn.Linear(2048, 1)
+        self.fc = nn.Linear(512, 1)
 
     def forward(self, x):
         x = self.resnet(x)  # CNN Feature Extraction
