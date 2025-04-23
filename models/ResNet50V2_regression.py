@@ -7,8 +7,7 @@ class ResNetModel(nn.Module):
     def __init__(self):
         super(ResNetModel, self).__init__()
 
-        # Load ResNet50 (since PyTorch lacks ResNet50V2)
-        resnet = models.resnet50(pretrained=True)
+        resnet = models.resnet50(models.ResNet50_Weights.IMAGENET1K_V2)
         self.resnet = nn.Sequential(*list(resnet.children())[:-2])  # Remove FC layer
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))  # Equivalent to GlobalAveragePooling2D
         self.dropout = nn.Dropout(0.5)
