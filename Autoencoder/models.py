@@ -183,32 +183,32 @@ class Autoencoder8_64(nn.Module):
         x = self.decoder(x)
         return x
 
-class Autoencoder8_32(nn.Module):
-    """
-    Encoded size : 32 * 64 * 64 = 131072 (50%)
-    """
-    def __init__(self):
-        super(Autoencoder8_32, self).__init__()
-        # Encoder
-        self.encoder = nn.Sequential(
-                nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1),  # 512 -> 256
-                nn.ReLU(),
-                nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1),  # 256 -> 128
-                nn.ReLU(),
-                nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),  # 128 -> 64
-                nn.ReLU(),
-                )
-        #
-        # Decoder
-        self.decoder = nn.Sequential(
-                nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # 64 -> 128
-                nn.ReLU(),
-                nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1),  # 128 -> 256
-                nn.ReLU(),
-                nn.ConvTranspose2d(8, 1, kernel_size=4, stride=2, padding=1),  # 256 -> 512
-                )
-
-    def forward(self, x):
-        x = self.encoder(x)
-        x = self.decoder(x)
-        return x
+# class Autoencoder8_32(nn.Module):
+#     """
+#     Encoded size : 32 * 64 * 64 = 131072 (50%)
+#     """
+#     def __init__(self):
+#         super(Autoencoder8_32, self).__init__()
+#         # Encoder
+#         self.encoder = nn.Sequential(
+#                 nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1),  # 512 -> 256
+#                 nn.ReLU(),
+#                 nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1),  # 256 -> 128
+#                 nn.ReLU(),
+#                 nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),  # 128 -> 64
+#                 nn.ReLU(),
+#                 )
+#         #
+#         # Decoder
+#         self.decoder = nn.Sequential(
+#                 nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),  # 64 -> 128
+#                 nn.ReLU(),
+#                 nn.ConvTranspose2d(16, 8, kernel_size=4, stride=2, padding=1),  # 128 -> 256
+#                 nn.ReLU(),
+#                 nn.ConvTranspose2d(8, 1, kernel_size=4, stride=2, padding=1),  # 256 -> 512
+#                 )
+#
+#     def forward(self, x):
+#         x = self.encoder(x)
+#         x = self.decoder(x)
+#         return x
