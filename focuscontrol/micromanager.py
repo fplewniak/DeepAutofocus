@@ -90,13 +90,21 @@ if __name__ == '__main__':
     # 5. (Optionnel) Utiliser un DataLoader
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model2 = torch.jit.load("C:/DeepAutofocus/Models/resnet18.pt", map_location=torch.device("cpu"))
+    model2 = torch.jit.load("C:/DeepAutofocus/Models/Resnet18reg_resize512_AdamW_1e-4_best_model.pt", map_location=torch.device("cpu"))
     model2.eval()  # Très important pour désactiver dropout/batchnorm si utilisé
     delta = pred(dataloader, model2, device)
 
-    core.set_position(z - delta)
-    z = core.get_position()
-    core.wait_for_device(z_stage)
+    with open('C:/DeepAutofocus/log.txt', 'a+') as logfile:
+        logfile.write(f'initial Z: {z} - delta Z: {delta}')
+        logfile.write('\n')
+        if abs(z - delta) <= 200:
+            core.set_position(z - delta)
+            core.wait_for_device(z_stage)
+            z = core.get_position()
+            logfile.write(f'new Z: {z}')
+        else:
+            logfile.write(f'shift too big: {z - delta}')
+        logfile.write('\n')
 
     # print("hauteur actuelle apres changement:",z)
     # print(param)
