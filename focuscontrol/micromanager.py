@@ -79,10 +79,39 @@ if __name__ == '__main__':
     # Si l'image est une seule couche, transformer en tableau numpy
     image_np = np.reshape(image, newshape=[core.get_image_height(), core.get_image_width()])
 
-    # 3. Définir des transformations (facultatif)
+    # 3. Définir des transformations
+    # transform = transforms.Compose(
+    #         [transforms.ToTensor(), v2.ToDtype(torch.float, scale=True), transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+    #          transforms.Normalize((0.5,), (0.5,))])
+
+    model = "Resnet18reg_resize512_AdamW_1e-4_best_model.pt"
+
+    match model:
+        case "Resnet18reg_resize256_AdamW_1e-4_best_model.pt":
+            image_size = 256
+            crop = False
+        case "Resnet18reg_resize512_AdamW_1e-4_best_model.pt":
+            image_size = 512
+            crop = False
+        case "Resnet18reg_resize1024_AdamW_1e-4_best_model.pt":
+            image_size = 1024
+            crop = False
+        case "Resnet18reg_1024_AdamW_1e-4_best_model.pt":
+            image_size = 1024
+            crop = True
+        case _:
+            image_size = image_np.shape[0]
+            crop = False
+
+    image_sizing = transforms.CenterCrop((image_size, image_size)) if crop else v2.Resize(image_size)
+
     transform = transforms.Compose(
-            [transforms.ToTensor(), v2.ToDtype(torch.float, scale=True), transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-             transforms.Normalize((0.5,), (0.5,))])
+            [transforms.ToTensor(),
+             v2.ToDtype(torch.float, scale=True),
+             transforms.Normalize((0.5,), (0.5,)),
+             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+             image_sizing
+             ])
 
     # 4. Créer le dataset
     dataset = NumpyImageDataset(image_np, transform=transform)
@@ -90,7 +119,7 @@ if __name__ == '__main__':
     # 5. (Optionnel) Utiliser un DataLoader
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model2 = torch.jit.load("C:/DeepAutofocus/Models/Resnet18reg_resize512_AdamW_1e-4_best_model.pt", map_location=torch.device("cpu"))
+    model2 = torch.jit.load(f"C:/DeepAutofocus/Models/{model}", map_location=torch.device("cpu"))
     model2.eval()  # Très important pour désactiver dropout/batchnorm si utilisé
     delta = pred(dataloader, model2, device)
 
