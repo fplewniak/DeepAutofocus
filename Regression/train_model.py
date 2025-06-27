@@ -12,10 +12,9 @@ from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader, random_split
 from torchinfo import summary
 
-from ViT import Vit_b_16, Vit_l_32, Vit_l_32_2DenseLayers, ViTRegressor
 from ResNet18 import ResNet18Model, ResNet18Model2DenseLayers, ResNet18Model3DenseLayers
 from ResNet50 import ResNet50Reg
-from SwinT import SwinT_t, SwinT_s
+from MobileNetV3 import MobileNetV3_l, MobileNetV3_s
 from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 
@@ -24,7 +23,7 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet50', 'SwinT_t', 'SwinT_s'],
+                        choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet50', 'MobileNetV3_l', 'MobileNetV3_s'],
                         default='ResNet18'),
     parser.add_argument('--optim', metavar='STR', help='optimizer', choices=['Adam', 'AdamW', 'SGD', 'RMSprop'], default='AdamW')
     parser.add_argument('--epochs', metavar='INT', help='number of epochs', type=int, default=10)
@@ -163,14 +162,14 @@ if __name__ == '__main__':
             model = ResNet18Model3DenseLayers().to(device)
         case 'ResNet50':
             model = ResNet50Reg().to(device)
-        case 'SwinT_t':
-            model = SwinT_t().to(device)
-        case 'SwinT_s':
-            model = SwinT_s().to(device)
+        case 'MobileNetV3_l':
+            model = MobileNetV3_l().to(device)
+        case 'MobileNetV3_s':
+            model = MobileNetV3_s().to(device)
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 
-    summary(model, input_size=(batch_size, 3, image_size, image_size))
+    # summary(model, input_size=(batch_size, 3, image_size, image_size))
 
     #### Training the model ##################"
     criterion = nn.MSELoss()
