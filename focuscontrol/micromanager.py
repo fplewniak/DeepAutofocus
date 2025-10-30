@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2, transforms
 import numpy as np
 import sys
+from matplotlib import pyplot as plt
 
 
 # class CustomImageDataset(Dataset):
@@ -54,6 +55,7 @@ def pred(dataloader, model, device):
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
     with torch.no_grad():
         for X in dataloader:
+            print(f'{min(X.flatten())} - {max(X.flatten())}')
             X = X.to(device)
             pred = model(X)
             # print(pred)
@@ -76,17 +78,24 @@ if __name__ == '__main__':
     z = core.get_position()
     # print("hauteur actuelle:",z)
 
-    # Si l'image est une seule couche, transformer en tableau numpy
-    image_np = np.reshape(image, newshape=[core.get_image_height(), core.get_image_width()])
-
+    # transformer l'image en tableau numpy et la tourner de 90° pour l'orienter comme les images d'apprentissage
+    image_np = np.reshape(image, shape=[core.get_image_height(), core.get_image_width()])
+    # image_np = np.rot90(image_np, axes=[0, 1]).copy()
+    print(f'{min(image_np.flatten())} - {max(image_np.flatten())}')
+    #plt.imshow(image_np / 65536.0)
+    #plt.show()
+    
     # 3. Définir des transformations
     # transform = transforms.Compose(
     #         [transforms.ToTensor(), v2.ToDtype(torch.float, scale=True), transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
     #          transforms.Normalize((0.5,), (0.5,))])
 
-    model = "Resnet18reg_resize512_AdamW_1e-4_best_model.pt"
+    model = "Resnet34_resize512_best_model.pt"
 
     match model:
+        case "Resnet34_resize512_best_model.pt":
+            image_size = 512
+            crop = False
         case "Resnet18reg_resize256_AdamW_1e-4_best_model.pt":
             image_size = 256
             crop = False
@@ -108,6 +117,7 @@ if __name__ == '__main__':
     transform = transforms.Compose(
             [transforms.ToTensor(),
              v2.ToDtype(torch.float, scale=True),
+             #v2.functional.autocontrast,
              transforms.Normalize((0.5,), (0.5,)),
              transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
              image_sizing
@@ -119,14 +129,14 @@ if __name__ == '__main__':
     # 5. (Optionnel) Utiliser un DataLoader
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model2 = torch.jit.load(f"C:/DeepAutofocus/Models/{model}", map_location=torch.device("cpu"))
+    model2 = torch.jit.load(f"C:/DeepAutofocus/Models/{model}", map_location=torch.device(device))
     model2.eval()  # Très important pour désactiver dropout/batchnorm si utilisé
     delta = pred(dataloader, model2, device)
 
     with open('C:/DeepAutofocus/log.txt', 'a+') as logfile:
         logfile.write(f'initial Z: {z} - delta Z: {delta}')
         logfile.write('\n')
-        if abs(z - delta) <= 200:
+        if abs(delta) <= 10:
             core.set_position(z - delta)
             core.wait_for_device(z_stage)
             z = core.get_position()

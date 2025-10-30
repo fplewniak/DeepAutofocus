@@ -29,9 +29,9 @@ def get_params(argv):
     parser.add_argument('--epochs', metavar='INT', help='number of epochs', type=int, default=10)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--lr', metavar='FLOAT', help='learning rate', type=float, default=1e-3)
-    parser.add_argument('--weight_decay', metavar='FLOAT', help='weight decay', type=float, default=1e-2)
+    parser.add_argument('--weight_decay', metavar='FLOAT', help='weight decay', type=float, default=0.0)
     parser.add_argument('--out', metavar='FILE', help='The output files prefix', default=None)
-    parser.add_argument('--image_size', metavar='INT', help='size of image (cropped at the centre)', type=int, default=512)
+    parser.add_argument('--image_size', metavar='INT', help='size of image (resized)', type=int, default=512)
     parser.add_argument('--lambda1', metavar='FLOAT', help='L1 lambda value', type=float, default=0.0)
     parser.add_argument('--lambda2', metavar='FLOAT', help='L2 lambda value', type=float, default=0.0)
 
