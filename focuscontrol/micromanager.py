@@ -76,10 +76,12 @@ if __name__ == '__main__':
     image = core.get_image()
 
     z = core.get_position()
+    initial_z = z
     # print("hauteur actuelle:",z)
 
     # transformer l'image en tableau numpy et la tourner de 90° pour l'orienter comme les images d'apprentissage
-    image_np = np.reshape(image, shape=[core.get_image_height(), core.get_image_width()])
+    image_np = np.reshape(image, shape=[core.get_image_width(), core.get_image_height()])
+    # image_np = np.reshape(image, shape=[core.get_image_height(), core.get_image_width()])
     # image_np = np.rot90(image_np, axes=[0, 1]).copy()
     print(f'{min(image_np.flatten())} - {max(image_np.flatten())}')
     #plt.imshow(image_np / 65536.0)
@@ -136,13 +138,13 @@ if __name__ == '__main__':
     with open('C:/DeepAutofocus/log.txt', 'a+') as logfile:
         logfile.write(f'initial Z: {z} - delta Z: {delta}')
         logfile.write('\n')
-        if abs(delta) <= 10:
+        if abs(initial_z - z + delta) <= 10:
             core.set_position(z - delta)
             core.wait_for_device(z_stage)
             z = core.get_position()
             logfile.write(f'new Z: {z}')
         else:
-            logfile.write(f'shift too big: {z - delta}')
+            logfile.write(f'shift too big: {initial_z - z + delta}')
         logfile.write('\n')
 
     # print("hauteur actuelle apres changement:",z)
