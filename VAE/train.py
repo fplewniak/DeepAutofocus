@@ -6,7 +6,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision.transforms import transforms, v2
 
-from dataset import FocusImageDataset
+from Florian.Drafts.dataset import FocusImageDataset
 from models import VAE
 
 
