@@ -27,9 +27,13 @@ def get_params(argv):
     parser.add_argument('--model', metavar='STR', help='Model',
                         choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet34', 'ResNet50', 'MobileNetV3_l',
                                  'MobileNetV3_s'], default='ResNet18'),
+    parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
+                                                          ' the corresponding ground-truth delta Z value separated with a comma',
+                        required=True, type=str)
     parser.add_argument('--freeze', help='Freeze pretrained weights and only train the regression head',
                         action='store_true')
-    parser.add_argument('--optim', metavar='STR', help='optimizer', choices=['Adam', 'AdamW', 'SGD', 'RMSprop'], default='AdamW')
+    parser.add_argument('--optim', metavar='STR', help='optimizer', choices=['Adam', 'AdamW', 'SGD', 'RMSprop'],
+                        default='AdamW')
     parser.add_argument('--epochs', metavar='INT', help='number of epochs', type=int, default=10)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--lr', metavar='FLOAT', help='learning rate', type=float, default=1e-3)
@@ -48,7 +52,7 @@ def get_params(argv):
 
     return (argscope.model, argscope.epochs, argscope.batch_size, argscope.out, argscope.optim, argscope.lr, argscope.weight_decay,
             argscope.crop, argscope.image_size, argscope.lambda1, argscope.lambda2, argscope.savefig, argscope.title,
-            argscope.weighed_loss, argscope.freeze)
+            argscope.weighed_loss, argscope.freeze, argscope.filelist)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, device, lambda1, lambda2):
@@ -96,7 +100,7 @@ def fix_filename(filename):
 
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop,
-     image_size, lambda1, lambda2, savefig, title, weighed_loss, freeze) = get_params(sys.argv[1:])
+     image_size, lambda1, lambda2, savefig, title, weighed_loss, freeze, filelist) = get_params(sys.argv[1:])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -118,7 +122,7 @@ if __name__ == '__main__':
              # models.ViT_B_16_Weights.DEFAULT.transforms()
              ])
 
-    all_df = pd.read_csv('/data3/DeepAutoFocus/20250610_Nikon_zStacks_W52_YAK1-09/CorrectFocusOnCells.csv', header=0, names=['filename', 'deltaz'])
+    all_df = pd.read_csv(filelist, header=0, names=['filename', 'deltaz'])
     # print(all_df)
     group_indices = np.arange(len(all_df)) // 61
     unique_groups = np.unique(group_indices)

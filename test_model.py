@@ -17,6 +17,9 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='model file name', type=str, required=True)
+    parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
+                                                          ' the corresponding ground-truth delta Z value separated with a comma',
+                        required=True, type=str)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
     parser.add_argument('--image_size', metavar='INT', help='size of image (cropped at the centre)', type=int, default=512)
@@ -24,7 +27,7 @@ def get_params(argv):
 
     argscope = parser.parse_args()
 
-    return argscope.model, argscope.batch_size, argscope.crop, argscope.image_size, argscope.title
+    return argscope.model, argscope.batch_size, argscope.crop, argscope.image_size, argscope.title, argscope.filelist
 
 def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
@@ -44,7 +47,7 @@ def test_loop(test_loader, model, loss_fn, device, name):
     return comparison
 
 if __name__ == '__main__':
-    model_name, batch_size, crop, image_size, title = get_params(sys.argv[1:])
+    model_name, batch_size, crop, image_size, title, filelist = get_params(sys.argv[1:])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -65,8 +68,7 @@ if __name__ == '__main__':
              # models.ViT_B_16_Weights.DEFAULT.transforms()
              ])
 
-    all_df = pd.read_csv('/data3/DeepAutoFocus/20250610_Nikon_zStacks_W52_YAK1-09/CorrectFocusOnCells.csv', header=0,
-                         names=['filename', 'deltaz'])
+    all_df = pd.read_csv(filelist, header=0, names=['filename', 'deltaz'])
     print(all_df)
     group_indices = np.arange(len(all_df)) // 61
     unique_groups = np.unique(group_indices)
