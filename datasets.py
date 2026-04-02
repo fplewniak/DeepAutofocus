@@ -1,12 +1,6 @@
-import os
-from pathlib import Path
-
-import PIL.Image
 import numpy as np
-import torch
 from tifffile import tifffile
 from torch.utils.data import Dataset
-from matplotlib import pyplot as plt
 
 
 class FocusImageDataset(Dataset):

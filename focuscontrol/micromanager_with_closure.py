@@ -1,7 +1,5 @@
-import os
 from pycromanager import Core
 import torch
-import tifffile
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2, transforms
 import numpy as np

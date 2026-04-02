@@ -1,36 +1,9 @@
-import os
 from pycromanager import Core
 import torch
-import tifffile
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2, transforms
 import numpy as np
 import sys
-from matplotlib import pyplot as plt
-
-
-# class CustomImageDataset(Dataset):
-#     def __init__(self, annotations_liste, img_dir, transform=None, target_transform=None):
-#         self.img_labels = annotations_liste
-#         self.img_dir = img_dir
-#         self.transform = transform
-#         self.target_transform = target_transform
-#
-#     def __len__(self):
-#         return len(self.img_labels)
-#
-#     def __getitem__(self, idx):
-#         filename, label = self.img_labels[idx]
-#         label = np.float32(label)
-#         img_path = os.path.join(self.img_dir, filename)
-#         image = tifffile.imread(img_path)
-#
-#         if self.transform:
-#             image = self.transform(image)
-#         if self.target_transform:
-#             label = self.target_transform(label)
-#         return image, label
-
 
 class NumpyImageDataset(Dataset):
     def __init__(self, image_array, transform=None):
