@@ -18,13 +18,13 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='model file name', type=str, required=True)
-    parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
-                                                          ' the corresponding ground-truth delta Z value separated with a comma',
-                        required=True, type=str)
+    # parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
+    #                                                       ' the corresponding ground-truth delta Z value separated with a comma',
+    #                     required=True, type=str)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
     parser.add_argument('--image_size', metavar='INT', help='size of image (cropped at the centre)', type=int, default=512)
-    parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default=None)
+    parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default='')
 
     argscope = parser.parse_args()
 

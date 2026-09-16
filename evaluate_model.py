@@ -23,7 +23,7 @@ def get_params(argv):
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
     parser.add_argument('--image_size', metavar='INT', help='size of image', type=int, default=512)
-    parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default=None)
+    parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default='')
     parser.add_argument('--out_stats', metavar='STR', help='Save stats as csv', type=str, default=None)
     parser.add_argument('--out_data', metavar='STR', help='Save predictions vs ground truth as csv', type=str, default=None)
     parser.add_argument('--savefig', metavar='FILE', help='Save plot to file', default=None)
