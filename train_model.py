@@ -1,3 +1,4 @@
+import multiprocessing
 import sys
 import argparse
 
@@ -101,6 +102,8 @@ def fix_filename(filename):
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop,
      image_size, lambda1, lambda2, savefig, title, weighed_loss, freeze, filelist) = get_params(sys.argv[1:])
+
+    multiprocessing.set_start_method('fork')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")

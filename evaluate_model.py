@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing
 import re
 import sys
 
@@ -56,6 +57,8 @@ if __name__ == '__main__':
     (model_name, batch_size, image_size, title, ground_truth_file, crop,
      out_stats, out_data, savefig, weighed_loss) = get_params(sys.argv[1:])
     print(out_data)
+
+    multiprocessing.set_start_method('fork')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
