@@ -21,13 +21,15 @@ from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
+from models.SobelNet import SobelNet
+
 
 def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
                         choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet34', 'ResNet50', 'MobileNetV3_l',
-                                 'MobileNetV3_s'], default='ResNet18'),
+                                 'MobileNetV3_s', 'SobelNet'], default='SobelNet'),
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
                         required=True, type=str)
@@ -190,6 +192,8 @@ if __name__ == '__main__':
             model = MobileNetV3_l().to(device)
         case 'MobileNetV3_s':
             model = MobileNetV3_s().to(device)
+        case 'SobelNet':
+            model = SobelNet().to(device)
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 

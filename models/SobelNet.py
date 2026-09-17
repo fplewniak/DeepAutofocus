@@ -2,12 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class Net(nn.Module):
+from layers.filters import SobelLayer
+
+
+class SobelNet(nn.Module):
     """
     Class for simple neural network
     """
     def __init__(self):
-        super(Net, self).__init__()
+        super(SobelNet, self).__init__()
+        self.sobel = SobelLayer()
         self.conv1 = nn.Conv2d(1, 8, 3, 1)
         self.conv2 = nn.Conv2d(8, 16, 3, 1)
         self.dropout = nn.Dropout(0.5)
@@ -19,7 +23,8 @@ class Net(nn.Module):
         :param x: image data
         :return: predicted delta z
         """
-        # Pass data through conv1
+        # Pass data through Sobel layer
+        x = self.sobel(x)
         x = self.conv1(x)
         # Use the rectified-linear activation function over x
         x = F.relu(x)
@@ -33,3 +38,9 @@ class Net(nn.Module):
         x = self.dropout(x)
         output = self.regression(x)
         return output
+
+    def to(self, *args, **kwargs):
+        super().to(*args, **kwargs)
+        for w in self.sobel.weights:
+            w = w.to(*args, **kwargs)
+        return self
