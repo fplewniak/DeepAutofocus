@@ -18,9 +18,9 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='model file name', type=str, required=True)
-    # parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
-    #                                                       ' the corresponding ground-truth delta Z value separated with a comma',
-    #                     required=True, type=str)
+    parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
+                                                          ' the corresponding ground-truth delta Z value separated with a comma',
+                        required=True, type=str)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
     parser.add_argument('--image_size', metavar='INT', help='size of image (cropped at the centre)', type=int, default=512)
@@ -66,7 +66,7 @@ if __name__ == '__main__':
              v2.ToDtype(torch.float, scale=True),
              v2.functional.autocontrast,
              # transforms.Normalize((0.5,), (0.5,)),
-             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+             # transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
              image_sizing
              # models.ViT_B_16_Weights.DEFAULT.transforms()
              ])

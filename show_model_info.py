@@ -8,8 +8,8 @@ from ResNet18 import ResNet18Model, ResNet18Model2DenseLayers, ResNet18Model3Den
 from ResNet34 import ResNet34Model
 from ResNet50 import ResNet50Reg
 from MobileNetV3 import MobileNetV3_l, MobileNetV3_s
+from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
-from models.Model import Net
 
 
 def get_params(argv):
@@ -17,7 +17,7 @@ def get_params(argv):
 
     parser.add_argument('--model', metavar='STR', help='Model',
                         choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet34', 'ResNet50', 'MobileNetV3_l',
-                                 'MobileNetV3_s', 'SobelNet'], default='SobelNet')
+                                 'MobileNetV3_s', 'SobelNet', 'LaplacianNet'], default='SobelNet')
     parser.add_argument('--channels', metavar='INT', help='Number of channels', default=3, type=int)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--image_size', metavar='INT', help='size of image', type=int, default=512)
@@ -49,6 +49,8 @@ if __name__ == '__main__':
             model = MobileNetV3_s()
         case 'SobelNet':
             model = SobelNet()
+        case 'LaplacianNet':
+            model = LaplacianNet()
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 

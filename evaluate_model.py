@@ -11,7 +11,7 @@ from torchvision import models
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
-from loss_functions import WeighedMSELoss
+from loss_functions import WeightedMSELoss
 from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 
@@ -27,12 +27,12 @@ def get_params(argv):
     parser.add_argument('--out_stats', metavar='STR', help='Save stats as csv', type=str, default=None)
     parser.add_argument('--out_data', metavar='STR', help='Save predictions vs ground truth as csv', type=str, default=None)
     parser.add_argument('--savefig', metavar='FILE', help='Save plot to file', default=None)
-    parser.add_argument('--weighed_loss', metavar='STR', help='weighing loss', choices=['gauss', 'lorentz', 'plain'],
+    parser.add_argument('--weighted_loss', metavar='STR', help='weighting loss', choices=['gauss', 'lorentz', 'plain'],
                         default=None)
 
     a = parser.parse_args()
 
-    return a.model, a.batch_size, a.image_size, a.title, a.gt, a.crop, a.out_stats, a.out_data, a.savefig, a.weighed_loss
+    return a.model, a.batch_size, a.image_size, a.title, a.gt, a.crop, a.out_stats, a.out_data, a.savefig, a.weighted_loss
 
 def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
@@ -55,7 +55,7 @@ def test_loop(test_loader, model, loss_fn, device, name):
 
 if __name__ == '__main__':
     (model_name, batch_size, image_size, title, ground_truth_file, crop,
-     out_stats, out_data, savefig, weighed_loss) = get_params(sys.argv[1:])
+     out_stats, out_data, savefig, weighted_loss) = get_params(sys.argv[1:])
     print(out_data)
 
     multiprocessing.set_start_method('fork')
@@ -74,7 +74,7 @@ if __name__ == '__main__':
              v2.ToDtype(torch.float, scale=True),
              v2.functional.autocontrast,
              # transforms.Normalize((0.5,), (0.5,)),
-             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+             # transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
              image_sizing
              # models.ViT_B_16_Weights.DEFAULT.transforms()
              ])
@@ -92,8 +92,8 @@ if __name__ == '__main__':
     model = torch.jit.load(model_name)
     # model = torch.jit.load('Resnet18Florian_10epochs_batch8.pt')
 
-    if weighed_loss is not None:
-        criterion = WeighedMSELoss(method=weighed_loss)
+    if weighted_loss is not None:
+        criterion = WeightedMSELoss(method=weighted_loss)
     else:
         criterion = nn.MSELoss()
 

@@ -3,14 +3,14 @@ from torch import nn
 import torch.nn.functional as F
 
 
-class WeighedMSELoss(nn.Module):
+class WeightedMSELoss(nn.Module):
     """
     Computes a weighed loss where larger predicted values are less important as long as they are in the right
      direction (same sign as ground truth). This means that precision should be favoured around the correct focus and
      diverging predictions are penalized.
     """
     def __init__(self, method = 'gauss', l = None):
-        super(WeighedMSELoss, self).__init__()
+        super(WeightedMSELoss, self).__init__()
         self.method = method
         self.l = l
 

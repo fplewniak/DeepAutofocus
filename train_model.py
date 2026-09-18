@@ -12,7 +12,7 @@ from torch import nn, optim
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
-from loss_functions import WeighedMSELoss
+from loss_functions import WeightedMSELoss
 from ResNet18 import ResNet18Model, ResNet18Model2DenseLayers, ResNet18Model3DenseLayers
 from ResNet34 import ResNet34Model
 from ResNet50 import ResNet50Reg
@@ -21,6 +21,7 @@ from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
+from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
 
 
@@ -29,7 +30,7 @@ def get_params(argv):
 
     parser.add_argument('--model', metavar='STR', help='Model',
                         choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet34', 'ResNet50', 'MobileNetV3_l',
-                                 'MobileNetV3_s', 'SobelNet'], default='SobelNet'),
+                                 'MobileNetV3_s', 'SobelNet', 'LaplacianNet'], default='SobelNet'),
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
                         required=True, type=str)
@@ -48,14 +49,16 @@ def get_params(argv):
     parser.add_argument('--lambda2', metavar='FLOAT', help='L2 lambda value', type=float, default=0.0)
     parser.add_argument('--savefig', metavar='FILE', help='Save plot to file', default=None)
     parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default=None)
-    parser.add_argument('--weighed_loss', metavar='STR', help='weighing loss', choices=['gauss', 'lorentz', 'plain'],
+    parser.add_argument('--weighted_loss', metavar='STR', help='weighting loss', choices=['gauss', 'lorentz', 'plain'],
+                        default=None)
+    parser.add_argument('--init_weights', metavar='STR', help='weight initialization', choices=['kaiming', 'xavier'],
                         default=None)
 
     argscope = parser.parse_args()
 
     return (argscope.model, argscope.epochs, argscope.batch_size, argscope.out, argscope.optim, argscope.lr, argscope.weight_decay,
             argscope.crop, argscope.image_size, argscope.lambda1, argscope.lambda2, argscope.savefig, argscope.title,
-            argscope.weighed_loss, argscope.freeze, argscope.filelist)
+            argscope.weighted_loss, argscope.freeze, argscope.filelist, argscope.init_weights)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, device, lambda1, lambda2):
@@ -103,7 +106,7 @@ def fix_filename(filename):
 
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop,
-     image_size, lambda1, lambda2, savefig, title, weighed_loss, freeze, filelist) = get_params(sys.argv[1:])
+     image_size, lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights) = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -122,7 +125,7 @@ if __name__ == '__main__':
              v2.ToDtype(torch.float, scale=True),
              v2.functional.autocontrast,
              # transforms.Normalize((0.5,), (0.5,)),
-             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+             # transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
              image_sizing
              # models.ViT_B_16_Weights.DEFAULT.transforms()
              ])
@@ -166,13 +169,15 @@ if __name__ == '__main__':
     df = all_df[all_df['group'].isin(test_grp)]
     df.to_csv('test_training.csv', sep=',', header=False, index=False)
     test_df = df.drop(columns='group')
-    # test_list = list(zip(test_df.filename, test_df.deltaz))
-    # test_dataset = FocusImageDataset(test_list, transform, None)
+    #
+    # train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
 
-    # batch_size = 16
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True)
+    img, labels, filenames = train_dataset.__getitem__(0)
+    print(f'{img.shape=} {labels=} {filenames=}')
 
     print(f'Training dataset: {len(train_loader)}')
     print(f'Validation dataset: {len(val_loader)}')
@@ -193,15 +198,17 @@ if __name__ == '__main__':
         case 'MobileNetV3_s':
             model = MobileNetV3_s().to(device)
         case 'SobelNet':
-            model = SobelNet().to(device)
+            model = SobelNet(init_weights).to(device)
+        case 'LaplacianNet':
+            model = LaplacianNet(init_weights).to(device)
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 
     # summary(model, input_size=(batch_size, 3, image_size, image_size))
 
     #### Training the model ##################"
-    if weighed_loss is not None:
-        criterion = WeighedMSELoss(method=weighed_loss)
+    if weighted_loss is not None:
+        criterion = WeightedMSELoss(method=weighted_loss)
     else:
         criterion = nn.MSELoss()
 

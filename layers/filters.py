@@ -2,40 +2,42 @@ import torch
 import torchvision
 from torch import nn
 import torch.nn.functional as F
+import torchvision.transforms.v2.functional as Fviz
 
-class FilterLayer(nn.Module):
-    def __init__(self, kernels, blur=False):
-        super(FilterLayer, self).__init__()
+
+class LaplacianFilterLayer(nn.Module):
+    def __init__(self, blur= False):
+        super(LaplacianFilterLayer, self).__init__()
         self.blur = blur
-        if not isinstance(kernels, tuple):
-            kernels = (kernels,)
-        self.weights = []
-        for kernel in kernels:
-            self.weights.append(nn.Parameter(data=torch.FloatTensor(kernel).unsqueeze(0).unsqueeze(0), requires_grad=False))
+        kernel = [[0, -1.0, 0],
+                  [-1.0,  4.0, -1.0],
+                  [0, -1.0, 0]]
+        self.weight = nn.Parameter(data=torch.FloatTensor(kernel).unsqueeze(0).unsqueeze(0), requires_grad=False)
 
     def forward(self, x):
         if self.blur:
-            x = torchvision.transforms.GaussianBlur(1)(x)
-        out = torch.pow(F.conv2d(x, self.weights[0], stride=1, padding=1), 2)
-        if len(self.weights) > 1:
-            for w in self.weights[1:]:
-                out +=  torch.pow(F.conv2d(x, w, stride=1, padding=1), 2)
-        return torch.sqrt(out + 1e-6)
+            x = Fviz.gaussian_blur(x, [1])
+        x = F.conv2d(x, self.weight, stride=1, padding=1)
+        return x + 1e-6
 
 
-class SobelLayer(FilterLayer):
-    def __init__(self):
-        kernel_v = [[-0.5, -1, -0.5],
-                    [ 0,    0,  0  ],
-                    [ 0.5,  1,  0.5]]
-        kernel_h = [[-0.5,  0,  0.5],
-                    [-1.0,  0,  1.0],
-                    [-0.5,  0,  0.5]]
-        super(SobelLayer, self).__init__((kernel_v, kernel_h))
+class SobelFilterLayer(nn.Module):
+    def __init__(self, blur= False):
+        super(SobelFilterLayer, self).__init__()
+        self.blur = blur
+        kernel_y = [[-0.5, -1, -0.5],
+                    [0, 0, 0],
+                    [0.5, 1, 0.5]]
+        kernel_x = [[-0.5, 0, 0.5],
+                    [-1.0, 0, 1.0],
+                    [-0.5, 0, 0.5]]
+        self.weight_x = nn.Parameter(data=torch.FloatTensor(kernel_x).unsqueeze(0).unsqueeze(0), requires_grad=False)
+        self.weight_y = nn.Parameter(data=torch.FloatTensor(kernel_y).unsqueeze(0).unsqueeze(0), requires_grad=False)
 
-class LaplacianLayer(FilterLayer):
-    def __init__(self):
-        kernel = [[0, -1.0, 0],
-                  [-1.0,  0, -1.0],
-                  [0, -1.0, 0]]
-        super(LaplacianLayer, self).__init__(kernel, blur=True)
+    def forward(self, x):
+        if self.blur:
+            x = Fviz.gaussian_blur(x, [1])
+        x_x = F.conv2d(x, self.weight_x, stride=1, padding=1)
+        x_y = F.conv2d(x, self.weight_y, stride=1, padding=1)
+
+        return torch.sqrt(torch.pow(x_x, 2) + torch.pow(x_y, 2) + 1e-6)
