@@ -13,14 +13,12 @@ from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
 from loss_functions import WeightedMSELoss
-from ResNet18 import ResNet18Model, ResNet18Model2DenseLayers, ResNet18Model3DenseLayers
-from ResNet34 import ResNet34Model
-from ResNet50 import ResNet50Reg
-from MobileNetV3 import MobileNetV3_l, MobileNetV3_s
+
 from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
+from models.ScharrNet import ScharrNet
 from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
 
@@ -29,8 +27,7 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['ResNet18', 'ResNet18_2Dense', 'ResNet18_3Dense', 'ResNet34', 'ResNet50', 'MobileNetV3_l',
-                                 'MobileNetV3_s', 'SobelNet', 'LaplacianNet'], default='SobelNet'),
+                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet'], default='SobelNet'),
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
                         required=True, type=str)
@@ -183,20 +180,8 @@ if __name__ == '__main__':
     print(f'Validation dataset: {len(val_loader)}')
 
     match model_name:
-        case 'ResNet18':
-            model = ResNet18Model(freeze=freeze).to(device)
-        case 'ResNet18_2Dense':
-            model = ResNet18Model2DenseLayers().to(device)
-        case 'ResNet18_3Dense':
-            model = ResNet18Model3DenseLayers().to(device)
-        case 'ResNet34':
-            model = ResNet34Model(freeze=freeze).to(device)
-        case 'ResNet50':
-            model = ResNet50Reg(freeze=freeze).to(device)
-        case 'MobileNetV3_l':
-            model = MobileNetV3_l().to(device)
-        case 'MobileNetV3_s':
-            model = MobileNetV3_s().to(device)
+        case 'ScharrNet':
+            model = ScharrNet(init_weights).to(device)
         case 'SobelNet':
             model = SobelNet(init_weights).to(device)
         case 'LaplacianNet':

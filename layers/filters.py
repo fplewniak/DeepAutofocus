@@ -41,3 +41,24 @@ class SobelFilterLayer(nn.Module):
         x_y = F.conv2d(x, self.weight_y, stride=1, padding=1)
 
         return torch.sqrt(torch.pow(x_x, 2) + torch.pow(x_y, 2) + 1e-6)
+
+class ScharrFilterLayer(nn.Module):
+    def __init__(self, blur= False):
+        super(ScharrFilterLayer, self).__init__()
+        self.blur = blur
+        kernel_y = [[3, 10, 3],
+                    [0, 0, 0],
+                    [-3, -10, -3]]
+        kernel_x = [[3, 0, -3],
+                    [10, 0, -10],
+                    [3, 0, -3]]
+        self.weight_x = nn.Parameter(data=torch.FloatTensor(kernel_x).unsqueeze(0).unsqueeze(0), requires_grad=False)
+        self.weight_y = nn.Parameter(data=torch.FloatTensor(kernel_y).unsqueeze(0).unsqueeze(0), requires_grad=False)
+
+    def forward(self, x):
+        if self.blur:
+            x = Fviz.gaussian_blur(x, [1])
+        x_x = F.conv2d(x, self.weight_x, stride=1, padding=1)
+        x_y = F.conv2d(x, self.weight_y, stride=1, padding=1)
+
+        return torch.sqrt(torch.pow(x_x, 2) + torch.pow(x_y, 2) + 1e-6)

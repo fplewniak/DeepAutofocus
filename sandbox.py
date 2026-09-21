@@ -5,7 +5,8 @@ import torch
 from matplotlib import pyplot as plt
 from tifffile import tifffile
 
-from layers.filters import SobelLayer, LaplacianLayer, SobelLike
+from layers.filters import *
+from layers.filters import ScharrFilterLayer
 
 # class GradLoss(nn.Module):
 #
@@ -21,14 +22,14 @@ from layers.filters import SobelLayer, LaplacianLayer, SobelLike
 
 
 if __name__ == '__main__':
-    net = LaplacianLayer()
+    net = ScharrFilterLayer()
 
     fig, ax = plt.subplots()
 
     filename = '/data3/DeepAutoFocus/20250610_Nikon_zStacks_W52_YAK1-09/_2/8-Pos004_003/img_channel000_position019_time000000000_z036.tif'
     img = tifffile.imread(filename)
     img = skimage.util.img_as_float(img).astype(np.float32)
-    img = torch.DoubleTensor(img).unsqueeze(2).permute(2, 0, 1).unsqueeze(0)
+    img = torch.FloatTensor(img).unsqueeze(2).permute(2, 0, 1).unsqueeze(0)
 
     print(img.shape)
     print(torch.max(img), torch.min(img))
