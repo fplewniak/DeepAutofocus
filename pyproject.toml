@@ -1,0 +1,20 @@
+[project]
+name = "deepautofocus"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "opencv-contrib-python-headless>=5.0.0.93",
+    "optuna>=5.0.0",
+    "optuna-dashboard>=0.21.0",
+    "pandas>=3.0.5",
+    "pandas-stubs~=3.0.5",
+    "scikit-image>=0.26.0",
+    "tensorax>=0.3.1",
+    "tensorboard>=2.21.0",
+    "tifffile>=2026.9.15",
+    "torch>=2.14.0",
+    "torchinfo>=1.8.0",
+    "torchvision>=0.29.0",
+]
