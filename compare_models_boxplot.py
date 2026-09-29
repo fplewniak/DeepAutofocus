@@ -49,7 +49,6 @@ def get_params(argv):
     parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default=None)
     parser.add_argument('--legend', metavar='STR', help='Legend specification', type=str, nargs='+',
                         action=equal_nargs('--data'))
-    parser.add_argument('--show_pred', help='Toggle plot of prediction errors', default=False, action='store_true')
     parser.add_argument('--savefig', metavar='FILE', help='Save plot to file', default=None)
     parser.add_argument('--violin', help='Plot violin plot instead of boxplot', default=False, action='store_true')
 
@@ -57,11 +56,11 @@ def get_params(argv):
 
     check_equal_nargs('--data', '--legend', parser, a)
 
-    return a.title, a.legend, a.data, a.show_pred, a.savefig, a.violin
+    return a.title, a.legend, a.data, a.savefig, a.violin
 
 
 if __name__ == '__main__':
-    title, legend, data_files, show_pred, savefig, violin = get_params(sys.argv[1:])
+    title, legend, data_files, savefig, violin = get_params(sys.argv[1:])
 
     fig, axis = plt.subplots(nrows=1, ncols=1)
 

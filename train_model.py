@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn, optim
+from torch.optim.lr_scheduler import StepLR
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -18,6 +19,7 @@ from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
+from models.LaplacianBlocks import LaplacianBlocks
 from models.ScharrNet import ScharrNet
 from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
@@ -27,7 +29,8 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet'], default='SobelNet'),
+                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks'], default='SobelNet'),
+    parser.add_argument('--blocks', metavar='INT', help='number of blocks', type=int, default=3)
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
                         required=True, type=str)
@@ -50,12 +53,17 @@ def get_params(argv):
                         default=None)
     parser.add_argument('--init_weights', metavar='STR', help='weight initialization', choices=['kaiming', 'xavier'],
                         default=None)
+    parser.add_argument('--nonlinear', metavar='STR', help='Regression nonlinear layer',
+                        choices=['ReLU', 'LeakyReLU', 'PReLU', 'Identity'], default='ReLU')
+    parser.add_argument('--nonlinearh', metavar='STR', help='Hidden nonlinear layer',
+                        choices=['ReLU', 'LeakyReLU', 'ELU', 'GELU', 'PReLU'], default='ReLU')
+    parser.add_argument('--channels', metavar='INT', help='Number of channels', default=3, type=int)
 
-    argscope = parser.parse_args()
+    a = parser.parse_args()
 
-    return (argscope.model, argscope.epochs, argscope.batch_size, argscope.out, argscope.optim, argscope.lr, argscope.weight_decay,
-            argscope.crop, argscope.image_size, argscope.lambda1, argscope.lambda2, argscope.savefig, argscope.title,
-            argscope.weighted_loss, argscope.freeze, argscope.filelist, argscope.init_weights)
+    return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.weight_decay, a.crop, a.image_size, a.nonlinear,
+            a.nonlinearh, a.lambda1, a.lambda2, a.savefig, a.title, a.weighted_loss, a.freeze, a.filelist,
+            a.init_weights, a.blocks, a.channels)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, device, lambda1, lambda2):
@@ -102,8 +110,8 @@ def fix_filename(filename):
 
 
 if __name__ == '__main__':
-    (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop,
-     image_size, lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights) = get_params(sys.argv[1:])
+    (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop, image_size, nonlinear, nonlinearh,
+     lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels) = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -185,7 +193,10 @@ if __name__ == '__main__':
         case 'SobelNet':
             model = SobelNet(init_weights).to(device)
         case 'LaplacianNet':
-            model = LaplacianNet(init_weights).to(device)
+            model = LaplacianNet(initw=init_weights, n_blocks=n_blocks, channels=n_channels, input_size=image_size,
+                                 nonlinear=nonlinear, nonlinearh=nonlinearh).to(device)
+        case 'LaplacianBlocks':
+            model = LaplacianBlocks(init_weights, n_blocks, nonlinear, nonlinearh, n_channels).to(device)
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 
@@ -206,8 +217,11 @@ if __name__ == '__main__':
             optimizer = optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
         case 'RMSprop':
             optimizer = optim.RMSprop(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=0.9)
+        case _:
+            optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
+    scheduler = StepLR(optimizer, step_size=5, gamma=0.8, last_epoch=-1)
+    reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
 
     history = []
 
@@ -227,24 +241,33 @@ if __name__ == '__main__':
             print(f"Epoch {epoch + 1}/{n_epochs}, "
                   f"Training Loss: {history[-1]['train loss']:.4f}, "
                   f"Validation Loss: {history[-1]['val loss']:.4f}, "
-                  f"learning rate: {scheduler.get_last_lr()}, "
+                  f"learning rate: {reduce_on_plateau.get_last_lr()}, "
                   f" -- ({datetime.now().strftime('%H:%M:%S')})")
             writer.add_scalars('Loss',
                                {'Training Loss': history[-1]['train loss'],
                                 'Validation Loss': history[-1]['val loss']},
                                epoch + 1)
             # Log the histogram of the model's weights
+            for name, param in model.blocks.named_parameters():
+                writer.add_histogram(f'weights/{name}', param, epoch + 1)
+                writer.add_histogram(f'gradients/{name}.grad', param.grad, epoch + 1)
+                # grad_norm = param.grad.norm()  # L2 norm
+                # writer.add_scalar(f'gradients/norm/{name}', grad_norm, epoch + 1)
+                # writer.add_scalar(f'norm_mean/{name}', grad_norm.mean(), epoch + 1)
+                # writer.add_scalar(f'norm_max/{name}', grad_norm.max(), epoch + 1)
+                # writer.add_scalar(f'norm_min/{name}', grad_norm.min(), epoch + 1)
             for name, param in model.regression.named_parameters():
             # for name, param in model.named_parameters():
                 writer.add_histogram(f'weights/{name}', param, epoch + 1)
                 writer.add_histogram(f'gradients/{name}.grad', param.grad, epoch + 1)
-                grad_norm = param.grad.norm()  # L2 norm
-                writer.add_scalar(f'gradients/norm/{name}', grad_norm, epoch + 1)
-                writer.add_scalar(f'norm_mean/{name}', grad_norm.mean(), epoch + 1)
-                writer.add_scalar(f'norm_max/{name}', grad_norm.max(), epoch + 1)
-                writer.add_scalar(f'norm_min/{name}', grad_norm.min(), epoch + 1)
+                # grad_norm = param.grad.norm()  # L2 norm
+                # writer.add_scalar(f'gradients/norm/{name}', grad_norm, epoch + 1)
+                # writer.add_scalar(f'norm_mean/{name}', grad_norm.mean(), epoch + 1)
+                # writer.add_scalar(f'norm_max/{name}', grad_norm.max(), epoch + 1)
+                # writer.add_scalar(f'norm_min/{name}', grad_norm.min(), epoch + 1)
 
-            scheduler.step(history[-1]['val loss'])
+            scheduler.step()
+            reduce_on_plateau.step(history[-1]['val loss'])
     finally:
         ##################################################################
         # torch.save(model.state_dict(), 'ResNet18_reg.pth')
