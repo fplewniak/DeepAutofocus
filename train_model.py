@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn, optim
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, LinearLR, SequentialLR, CosineAnnealingLR
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -58,12 +58,14 @@ def get_params(argv):
     parser.add_argument('--nonlinearh', metavar='STR', help='Hidden nonlinear layer',
                         choices=['ReLU', 'LeakyReLU', 'ELU', 'GELU', 'PReLU'], default='ReLU')
     parser.add_argument('--channels', metavar='INT', help='Number of channels', default=3, type=int)
+    parser.add_argument('--dropout', metavar='FLOAT', help='Dropout value', type=float, default=0.5)
+    parser.add_argument('--warmup', help='toggle warm-up scheduler', action='store_true')
 
     a = parser.parse_args()
 
     return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.weight_decay, a.crop, a.image_size, a.nonlinear,
             a.nonlinearh, a.lambda1, a.lambda2, a.savefig, a.title, a.weighted_loss, a.freeze, a.filelist,
-            a.init_weights, a.blocks, a.channels)
+            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, device, lambda1, lambda2):
@@ -74,8 +76,10 @@ def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, de
         outputs = torch.squeeze(model(images))
         loss = loss_fn(outputs, labels)
         # Apply L1 & L2 regularization
-        loss += (lambda1 * torch.abs(torch.cat([x.view(-1) for x in model.parameters()])).sum()
-                 + lambda2 * torch.square(torch.cat([x.view(-1) for x in model.parameters()])).sum())
+        if lambda1:
+            loss += lambda1 * torch.abs(torch.cat([x.view(-1) for x in model.parameters()])).sum()
+        elif lambda2:
+            loss += lambda2 * torch.square(torch.cat([x.view(-1) for x in model.parameters()])).sum()
 
         optimizer.zero_grad()
         loss.backward()
@@ -93,8 +97,10 @@ def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, de
             images, labels = images.to(device), labels.to(device)
             outputs = torch.squeeze(model(images))
             loss = loss_fn(outputs, labels)
-            loss += (lambda1 * torch.abs(torch.cat([x.view(-1) for x in model.parameters()])).sum()
-                     + lambda2 * torch.square(torch.cat([x.view(-1) for x in model.parameters()])).sum())
+            if lambda1:
+                loss += lambda1 * torch.abs(torch.cat([x.view(-1) for x in model.parameters()])).sum()
+            elif lambda2:
+                loss += lambda2 * torch.square(torch.cat([x.view(-1) for x in model.parameters()])).sum()
             val_loss += loss.item()
 
         avg_train_loss = running_loss / len(training_loader)
@@ -111,7 +117,7 @@ def fix_filename(filename):
 
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop, image_size, nonlinear, nonlinearh,
-     lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels) = get_params(sys.argv[1:])
+     lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels, dropout, warmup) = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -194,7 +200,7 @@ if __name__ == '__main__':
             model = SobelNet(init_weights).to(device)
         case 'LaplacianNet':
             model = LaplacianNet(initw=init_weights, n_blocks=n_blocks, channels=n_channels, input_size=image_size,
-                                 nonlinear=nonlinear, nonlinearh=nonlinearh).to(device)
+                                 nonlinear=nonlinear, nonlinearh=nonlinearh, dropout=dropout).to(device)
         case 'LaplacianBlocks':
             model = LaplacianBlocks(init_weights, n_blocks, nonlinear, nonlinearh, n_channels).to(device)
         case _:
@@ -220,8 +226,12 @@ if __name__ == '__main__':
         case _:
             optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    scheduler = StepLR(optimizer, step_size=5, gamma=0.8, last_epoch=-1)
-    reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
+    # scheduler = StepLR(optimizer, step_size=10, gamma=0.8, last_epoch=-1)
+    scheduler = CosineAnnealingLR(optimizer, 30, last_epoch=-1)
+    if warmup:
+            warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=5)
+            scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
+    reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
 
     history = []
 

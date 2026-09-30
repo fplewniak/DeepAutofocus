@@ -28,7 +28,7 @@ class LaplacianBlocks(nn.Module):
                 [
                     ('linear1', nn.LazyLinear(128)),
                     ('nonlinear', Nonlinear.layers[nonlinear]()),
-                    ('dropout', nn.Dropout(0.4)),
+                    ('dropout', nn.Dropout(dropout)),
                     ('linear2', nn.Linear(128, 1)),
                 ]
             )

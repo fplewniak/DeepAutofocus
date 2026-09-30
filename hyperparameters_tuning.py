@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 from optuna.trial import TrialState
 from torch import nn, optim
+from torch.optim.lr_scheduler import LinearLR, SequentialLR
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -37,34 +38,34 @@ def get_params(argv):
     parser.add_argument('--epochs', metavar='INT', help='number of epochs', type=int, default=10)
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
     parser.add_argument('--image_size', metavar='INT', help='size of image (cropped at the centre)', type=int, default=512)
-    parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
 
     parser.add_argument('--trials', metavar='INT', help='number of trials', type=int, default=10)
     parser.add_argument('--nonlinear', metavar='STR', help='Regression nonlinear layer',
                         choices=['ReLU', 'LeakyReLU', 'PReLU', 'Identity'], default='ReLU')
     parser.add_argument('--nonlinearh', metavar='STR', help='Hidden nonlinear layer',
                         choices=['ReLU', 'LeakyReLU', 'ELU', 'GELU', 'PReLU'], default='ReLU')
+    parser.add_argument('--warmup', help='toggle warm-up scheduler', action='store_true')
 
 
     a = parser.parse_args()
 
-    return (a.model, a.filelist, a.trials, a.crop, a.image_size, a.batch_size, a.epochs, a.nonlinear)
+    return (a.model, a.filelist, a.trials, a.crop, a.image_size, a.epochs, a.nonlinear, a.nonlinearh, a.warmup)
 
 
 class HyperparameterTuner:
-    def __init__(self, model_name, filelist, n_trials, crop, image_size, batch_size, n_epochs, train_loader, val_loader):
+    def __init__(self, model_name, filelist, n_trials, crop, image_size, n_epochs, warmup, train_dataset, val_dataset):
         self.model_name = model_name
         self.filelist = filelist
         self.n_trials = n_trials
         self.crop = crop
         self.image_size = image_size
-        self.batch_size = batch_size
         self.n_epochs = n_epochs
-        self.train_loader = train_loader
-        self.val_loader = val_loader
         self.path = '/home/fred/Projects/DeepFocus/optuna'
         os.makedirs(self.path, exist_ok=True)
         self.min_val_loss = torch.finfo(torch.float).max
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.warmup = warmup
 
     def tune_hyperparameters(self, n_trials: int = 100) -> optuna.Trial:
             """
@@ -101,38 +102,57 @@ class HyperparameterTuner:
             """
         print('Running objective function')
         parameters = {
-            # 'optim_name': 'AdamW',
-            # 'optim_name': trial.suggest_categorical('optim_name', ['AdamW', 'RMSprop']),
+            'optim_name': trial.suggest_categorical('optim_name', ['AdamW', 'RMSprop']),
             # 'init_weights': trial.suggest_categorical('init_weights', ['kaiming', 'xavier']),
-            # 'lr': trial.suggest_float("lr", 1e-5, 1e-2, log=True),
-            # 'L2': trial.suggest_float("L2", 1e-5, 1e-1, log=True),
+            'lr': trial.suggest_float("lr", 1e-5, 1e-2, log=True),
             # 'weighted_loss': trial.suggest_categorical('weighted_loss', ['gauss', 'lorentz', 'plain']),
-            'blocks': trial.suggest_int('blocks', 4, 7),
-            'channels': trial.suggest_int('channels', 4, 8),
-            'dropout': trial.suggest_float("dropout", 0.1, 0.5),
+            # 'blocks': trial.suggest_int('blocks', 4, 7),
+            # 'channels': trial.suggest_int('channels', 4, 8),
+            # 'dropout': trial.suggest_float("dropout", 0.1, 0.5),
             # 'nonlinear': trial.suggest_categorical('nonlinear', ['ReLU', 'LeakyReLU']),
             # 'nonlinearh': trial.suggest_categorical('nonlinearh', ['ReLU', 'LeakyReLU']),
-            'L1': 0.0,
-            'optim_name': 'AdamW',
+            'batch_size': trial.suggest_int('batch_size', 8, 128, step=8),
+            # 'L1': 0.0,
+            # 'optim_name': 'AdamW',
             'init_weights': 'kaiming',
-            'lr': 0.00027760306206483,
-            'L2': 0.0000148159971684519,
+            # 'lr': 0.00027760306206483,
+            # 'L2': 0.0000148159971684519,
             'weighted_loss': 'lorentz',
-            # 'blocks': 6,
-            # 'channels': 8,
+            'blocks': 6,
+            'channels': 4,
+            'dropout': 0.4655370920214137,
             'nonlinear': 'LeakyReLU',
             'nonlinearh': 'ReLU',
             'input_size': image_size,
+            # 'batch_size': 128,
         }
+        regularization = trial.suggest_categorical("regularization", ['L1', 'L2'])
+        if regularization == 'L1':
+            parameters['L1'] = trial.suggest_float("L1", 1e-6, 1e-2, log=True)
+            parameters['L2'] = 0.0
+            trial.set_user_attr("L2", 0.0)
+        else:
+            parameters['L2'] = trial.suggest_float("L2", 1e-6, 1e-2, log=True)
+            parameters['L1'] = 0.0
+            trial.set_user_attr("L1", 0.0)
 
-        val_loss, model = self.train_model(trial, parameters)
+        train_loader = DataLoader(self.train_dataset, batch_size=parameters['batch_size'], shuffle=True)
+        val_loader = DataLoader(self.val_dataset, batch_size=parameters['batch_size'], shuffle=False)
+
+        img, labels, filenames = self.train_dataset.__getitem__(0)
+        print(f'{img.shape=} {labels=} {filenames=}')
+
+        print(f'Training dataset: {len(train_loader)}')
+        print(f'Validation dataset: {len(val_loader)}')
+
+        val_loss, model = self.train_model(trial, parameters, train_loader, val_loader)
         if val_loss < self.min_val_loss:
             self.min_val_loss = val_loss
         del model
         gc.collect()
         return self.min_val_loss
 
-    def train_model(self, trial, parameters):
+    def train_model(self, trial, parameters: dict, train_loader, val_loader):
         match model_name:
             case 'SobelNet':
                 model = SobelNet(parameters['init_weights']).to(device)
@@ -178,13 +198,17 @@ class HyperparameterTuner:
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
 
+        if self.warmup:
+            warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=5)
+            scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
+
         history = []
 
         try:
             min_val_loss = torch.finfo(torch.float).max
             for epoch in range(n_epochs):
                 history.append(
-                    train_loop(self.train_loader, self.val_loader, model, criterion, optimizer, device,
+                    train_loop(train_loader, val_loader, model, criterion, optimizer, device,
                                parameters['L1'], parameters['L2']))
                 if history[-1]['val loss'] < min_val_loss:
                     min_val_loss = history[-1]['val loss']
@@ -209,7 +233,7 @@ class HyperparameterTuner:
 
 
 if __name__ == '__main__':
-    (model_name, filelist, n_trials, crop, image_size, batch_size, n_epochs, nonlinear) = get_params(sys.argv[1:])
+    (model_name, filelist, n_trials, crop, image_size, n_epochs, nonlinear, nonlinearh, warmup) = get_params(sys.argv[1:])
     multiprocessing.set_start_method('fork')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -252,16 +276,8 @@ if __name__ == '__main__':
     val_list = list(zip(val_df.filename, val_df.deltaz))
     val_dataset = FocusImageDataset(val_list, transform, None)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    img, labels, filenames = train_dataset.__getitem__(0)
-    print(f'{img.shape=} {labels=} {filenames=}')
-
-    print(f'Training dataset: {len(train_loader)}')
-    print(f'Validation dataset: {len(val_loader)}')
-
-    tuner = HyperparameterTuner(model_name, filelist, n_trials, crop, image_size, batch_size, n_epochs, train_loader, val_loader)
+    tuner = HyperparameterTuner(model_name, filelist, n_trials, crop, image_size, n_epochs, warmup, train_dataset, val_dataset)
 
     best_trial = tuner.tune_hyperparameters(n_trials)
 
