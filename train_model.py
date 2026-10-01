@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 from torch import nn, optim
 from torch.optim.lr_scheduler import StepLR, LinearLR, SequentialLR, CosineAnnealingLR
+from torchmetrics import PearsonCorrCoef, ConcordanceCorrCoef
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -60,20 +61,24 @@ def get_params(argv):
     parser.add_argument('--channels', metavar='INT', help='Number of channels', default=3, type=int)
     parser.add_argument('--dropout', metavar='FLOAT', help='Dropout value', type=float, default=0.5)
     parser.add_argument('--warmup', help='toggle warm-up scheduler', action='store_true')
+    parser.add_argument('--period', metavar='INT', help='Cosine LR period', default=30, type=int)
 
     a = parser.parse_args()
 
     return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.weight_decay, a.crop, a.image_size, a.nonlinear,
             a.nonlinearh, a.lambda1, a.lambda2, a.savefig, a.title, a.weighted_loss, a.freeze, a.filelist,
-            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup)
+            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period)
 
 
-def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, device, lambda1, lambda2):
+def train_loop(training_loader, validation_loader, model, loss_fn,
+               optimizer, device, lambda1, lambda2):
     model.train()
     running_loss = 0.0
+    concordance = ConcordanceCorrCoef().to(device)
     for images, labels, filename in training_loader:
         images, labels = images.to(device), labels.to(device)
         outputs = torch.squeeze(model(images))
+        concordance.update(outputs, labels)
         loss = loss_fn(outputs, labels)
         # Apply L1 & L2 regularization
         if lambda1:
@@ -92,10 +97,12 @@ def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, de
     # Validation phase
     model.eval()
     val_loss = 0.0
+    val_concordance = ConcordanceCorrCoef().to(device)
     with torch.no_grad():
         for images, labels, filename in validation_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = torch.squeeze(model(images))
+            val_concordance.update(outputs, labels)
             loss = loss_fn(outputs, labels)
             if lambda1:
                 loss += lambda1 * torch.abs(torch.cat([x.view(-1) for x in model.parameters()])).sum()
@@ -106,7 +113,8 @@ def train_loop(training_loader, validation_loader, model, loss_fn, optimizer, de
         avg_train_loss = running_loss / len(training_loader)
         avg_val_loss = val_loss / len(validation_loader)
 
-    return {'train loss': avg_train_loss, 'val loss': avg_val_loss}
+    return {'train loss': avg_train_loss, 'val loss': avg_val_loss,
+            'concordance': concordance.compute(), 'val concordance': val_concordance.compute()}
 
 
 def fix_filename(filename):
@@ -117,7 +125,8 @@ def fix_filename(filename):
 
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop, image_size, nonlinear, nonlinearh,
-     lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels, dropout, warmup) = get_params(sys.argv[1:])
+     lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels, dropout,
+     warmup, period) = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -128,6 +137,7 @@ if __name__ == '__main__':
     torch.backends.cudnn.benchmark = True
     # torch.set_float32_matmul_precision('high')
     torch.backends.cudnn.fp32_precision = "tf32"
+    torch.manual_seed(42)
 
     image_sizing = transforms.CenterCrop((image_size, image_size)) if crop else v2.Resize(image_size)
 
@@ -227,9 +237,9 @@ if __name__ == '__main__':
             optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     # scheduler = StepLR(optimizer, step_size=10, gamma=0.8, last_epoch=-1)
-    scheduler = CosineAnnealingLR(optimizer, 30, last_epoch=-1)
+    scheduler = CosineAnnealingLR(optimizer, period, last_epoch=-1)
     if warmup:
-            warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=5)
+            warmup_scheduler = LinearLR(optimizer, start_factor=0.01, end_factor=1.0, total_iters=5)
             scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
     reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
 
@@ -240,23 +250,34 @@ if __name__ == '__main__':
 
     try:
         min_val_loss = torch.finfo(torch.float).max
+        best_metric = 0.0
         for epoch in range(n_epochs):
             history.append(train_loop(train_loader, val_loader, model, criterion, optimizer, device, lambda1, lambda2))
-            if history[-1]['val loss'] < min_val_loss:
+            # if history[-1]['val loss'] < min_val_loss:
+            if history[-1]['val concordance'] > best_metric:
+                best_metric = history[-1]['val concordance']
                 min_val_loss = history[-1]['val loss']
                 model_scripted = torch.jit.script(model)
                 model_scripted.save(f'{outprefix}_best_model.pt')
                 print(
-                    f"Saving best model at epoch {epoch + 1} with val loss {min_val_loss} and train loss {history[-1]['train loss']}")
+                    # f"Saving best model at epoch {epoch + 1} with val loss {min_val_loss} and train loss {history[-1]['train loss']}")
+                    f"Saving best model at epoch {epoch + 1} with val concordance {best_metric} and train concordance {history[-1]['concordance']}")
             print(f"Epoch {epoch + 1}/{n_epochs}, "
                   f"Training Loss: {history[-1]['train loss']:.4f}, "
                   f"Validation Loss: {history[-1]['val loss']:.4f}, "
+                  f"Train concordance: {history[-1]['concordance']:.4f}, "
+                  f"Val concordance: {history[-1]['val concordance']:.4f}, "
                   f"learning rate: {reduce_on_plateau.get_last_lr()}, "
                   f" -- ({datetime.now().strftime('%H:%M:%S')})")
             writer.add_scalars('Loss',
                                {'Training Loss': history[-1]['train loss'],
-                                'Validation Loss': history[-1]['val loss']},
+                                'Validation Loss': history[-1]['val loss'], 'Best': min_val_loss},
                                epoch + 1)
+            writer.add_scalars('Concordance.',
+                               {'Training': history[-1]['concordance'],
+                                'Validation': history[-1]['val concordance'], 'Best': best_metric},
+                               epoch + 1)
+
             # Log the histogram of the model's weights
             for name, param in model.blocks.named_parameters():
                 writer.add_histogram(f'weights/{name}', param, epoch + 1)

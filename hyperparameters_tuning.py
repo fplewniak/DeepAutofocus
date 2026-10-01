@@ -12,7 +12,7 @@ import pandas as pd
 import torch
 from optuna.trial import TrialState
 from torch import nn, optim
-from torch.optim.lr_scheduler import LinearLR, SequentialLR
+from torch.optim.lr_scheduler import LinearLR, SequentialLR, CosineAnnealingLR
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -45,15 +45,15 @@ def get_params(argv):
     parser.add_argument('--nonlinearh', metavar='STR', help='Hidden nonlinear layer',
                         choices=['ReLU', 'LeakyReLU', 'ELU', 'GELU', 'PReLU'], default='ReLU')
     parser.add_argument('--warmup', help='toggle warm-up scheduler', action='store_true')
-
+    parser.add_argument('--period', metavar='INT', help='Cosine LR period', default=30, type=int)
 
     a = parser.parse_args()
 
-    return (a.model, a.filelist, a.trials, a.crop, a.image_size, a.epochs, a.nonlinear, a.nonlinearh, a.warmup)
+    return (a.model, a.filelist, a.trials, a.crop, a.image_size, a.epochs, a.nonlinear, a.nonlinearh, a.warmup, a.period)
 
 
 class HyperparameterTuner:
-    def __init__(self, model_name, filelist, n_trials, crop, image_size, n_epochs, warmup, train_dataset, val_dataset):
+    def __init__(self, model_name, filelist, n_trials, crop, image_size, n_epochs, warmup, period, train_dataset, val_dataset):
         self.model_name = model_name
         self.filelist = filelist
         self.n_trials = n_trials
@@ -63,9 +63,11 @@ class HyperparameterTuner:
         self.path = '/home/fred/Projects/DeepFocus/optuna'
         os.makedirs(self.path, exist_ok=True)
         self.min_val_loss = torch.finfo(torch.float).max
+        self.best_metric = 0.0
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.warmup = warmup
+        self.period = period
 
     def tune_hyperparameters(self, n_trials: int = 100) -> optuna.Trial:
             """
@@ -76,7 +78,7 @@ class HyperparameterTuner:
             study_name = f"{datetime.now().strftime("%y%m%d%H%M%s")}"
             os.makedirs(f'{self.path}/{study_name}', exist_ok=True)
             study = optuna.create_study(study_name=study_name, storage=f"sqlite:///{self.path}/optuna.sqlite3",
-                                        direction="minimize")
+                                        direction="maximize")
             print('Optimization of objective function')
             study.optimize(self.objective, n_trials=n_trials)
             pruned_trials = study.get_trials(deepcopy=False, states=[TrialState.PRUNED])
@@ -145,12 +147,11 @@ class HyperparameterTuner:
         print(f'Training dataset: {len(train_loader)}')
         print(f'Validation dataset: {len(val_loader)}')
 
-        val_loss, model = self.train_model(trial, parameters, train_loader, val_loader)
-        if val_loss < self.min_val_loss:
-            self.min_val_loss = val_loss
+        val_loss, best_metric, model = self.train_model(trial, parameters, train_loader, val_loader)
+
         del model
         gc.collect()
-        return self.min_val_loss
+        return best_metric
 
     def train_model(self, trial, parameters: dict, train_loader, val_loader):
         match model_name:
@@ -196,50 +197,59 @@ class HyperparameterTuner:
             case 'RMSprop':
                 optimizer = optim.RMSprop(model.parameters(), lr=parameters['lr'], momentum=0.9)
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
-
+        # scheduler = StepLR(optimizer, step_size=10, gamma=0.8, last_epoch=-1)
+        scheduler = CosineAnnealingLR(optimizer, self.period, last_epoch=-1)
         if self.warmup:
-            warmup_scheduler = LinearLR(optimizer, start_factor=0.1, end_factor=1.0, total_iters=5)
+            warmup_scheduler = LinearLR(optimizer, start_factor=0.01, end_factor=1.0, total_iters=5)
             scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
+
+        reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
 
         history = []
 
         try:
             min_val_loss = torch.finfo(torch.float).max
+            best_metric = 0.0
             for epoch in range(n_epochs):
                 history.append(
                     train_loop(train_loader, val_loader, model, criterion, optimizer, device,
                                parameters['L1'], parameters['L2']))
-                if history[-1]['val loss'] < min_val_loss:
+                if history[-1]['val concordance'] > best_metric:
                     min_val_loss = history[-1]['val loss']
+                    best_metric = history[-1]['val concordance']
                     model_scripted = torch.jit.script(model)
                     model_scripted.save(f'{self.path}/{trial.study.study_name}/{trial.number}_best_model.pt')
                     print(
-                        f"Saving best model at epoch {epoch + 1} with val loss {min_val_loss} and train loss {history[-1]['train loss']}")
+                        # f"Saving best model at epoch {epoch + 1} with val loss {min_val_loss} and train loss {history[-1]['train loss']}")
+                        f"Saving best model at epoch {epoch + 1} with val concordance {best_metric} and train concordance {history[-1]['concordance']}")
                 print(f"Epoch {epoch + 1}/{n_epochs}, "
                       f"Training Loss: {history[-1]['train loss']:.4f}, "
                       f"Validation Loss: {history[-1]['val loss']:.4f}, "
-                      f"learning rate: {parameters['lr']}, "
+                      f"Train concordance: {history[-1]['concordance']:.4f}, "
+                      f"Val concordance: {history[-1]['val concordance']:.4f}, "
+                      f"learning rate: {scheduler.get_last_lr()}, "
                       f" -- ({datetime.now().strftime('%H:%M:%S')})")
                 if trial is not None:
-                    trial.report(history[-1]['val loss'], epoch)
+                    trial.report(history[-1]['val pearson'], epoch)
                     # Handle pruning based on the intermediate value.
                     if trial.should_prune():
                         raise optuna.exceptions.TrialPruned()
-                scheduler.step(history[-1]['val loss'])
+                scheduler.step()
+                reduce_on_plateau.step(history[-1]['val loss'])
         finally:
             print("Done.")
-        return history[-1]['val loss'], model
+        return history[-1]['val concordance'], best_metric, model
 
 
 if __name__ == '__main__':
-    (model_name, filelist, n_trials, crop, image_size, n_epochs, nonlinear, nonlinearh, warmup) = get_params(sys.argv[1:])
+    (model_name, filelist, n_trials, crop, image_size, n_epochs, nonlinear, nonlinearh, warmup, period) = get_params(sys.argv[1:])
     multiprocessing.set_start_method('fork')
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     torch.backends.cudnn.benchmark = True
     torch.backends.cudnn.fp32_precision = "tf32"
+    torch.manual_seed(42)
 
     image_sizing = transforms.CenterCrop((image_size, image_size)) if crop else v2.Resize(image_size)
 
@@ -277,7 +287,7 @@ if __name__ == '__main__':
     val_dataset = FocusImageDataset(val_list, transform, None)
 
 
-    tuner = HyperparameterTuner(model_name, filelist, n_trials, crop, image_size, n_epochs, warmup, train_dataset, val_dataset)
+    tuner = HyperparameterTuner(model_name, filelist, n_trials, crop, image_size, n_epochs, warmup, period, train_dataset, val_dataset)
 
     best_trial = tuner.tune_hyperparameters(n_trials)
 
