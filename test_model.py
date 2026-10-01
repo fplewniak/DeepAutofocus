@@ -14,6 +14,9 @@ from torch.utils.data import DataLoader
 from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 
+from loss_functions import WeightedMSELoss
+
+
 def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
@@ -25,10 +28,11 @@ def get_params(argv):
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
     parser.add_argument('--image_size', metavar='INT', help='size of image (cropped at the centre)', type=int, default=512)
     parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default='')
-
+    parser.add_argument('--weighted_loss', metavar='STR', help='weighting loss', choices=['gauss', 'lorentz', 'plain'],
+                        default=None)
     argscope = parser.parse_args()
 
-    return argscope.model, argscope.batch_size, argscope.crop, argscope.image_size, argscope.title, argscope.filelist
+    return argscope.model, argscope.batch_size, argscope.crop, argscope.image_size, argscope.title, argscope.filelist, argscope.weighted_loss
 
 def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
@@ -48,7 +52,7 @@ def test_loop(test_loader, model, loss_fn, device, name):
     return comparison
 
 if __name__ == '__main__':
-    model_name, batch_size, crop, image_size, title, filelist = get_params(sys.argv[1:])
+    model_name, batch_size, crop, image_size, title, filelist, weighted_loss= get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -140,8 +144,11 @@ if __name__ == '__main__':
     model = torch.jit.load(model_name)
     # model = torch.jit.load('Resnet18Florian_10epochs_batch8.pt')
 
-    #### Training the model ##################"
-    criterion = nn.MSELoss()
+    #### Testing the model ##################"
+    if weighted_loss is not None:
+        criterion = WeightedMSELoss(method=weighted_loss)
+    else:
+        criterion = nn.MSELoss()
 
     positions = {}
     comparison = test_loop(train_loader, model, criterion, device, 'Training')
