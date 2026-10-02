@@ -267,7 +267,7 @@ if __name__ == '__main__':
                   f"Validation Loss: {history[-1]['val loss']:.4f}, "
                   f"Train concordance: {history[-1]['concordance']:.4f}, "
                   f"Val concordance: {history[-1]['val concordance']:.4f}, "
-                  f"learning rate: {reduce_on_plateau.get_last_lr()}, "
+                  f"learning rate: {scheduler.get_last_lr()}, "
                   f" -- ({datetime.now().strftime('%H:%M:%S')})")
             writer.add_scalars('Loss',
                                {'Training Loss': history[-1]['train loss'],
@@ -298,7 +298,7 @@ if __name__ == '__main__':
                 # writer.add_scalar(f'norm_min/{name}', grad_norm.min(), epoch + 1)
 
             scheduler.step()
-            reduce_on_plateau.step(history[-1]['val loss'])
+            # reduce_on_plateau.step(history[-1]['val loss'])
     finally:
         ##################################################################
         # torch.save(model.state_dict(), 'ResNet18_reg.pth')
