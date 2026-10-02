@@ -104,18 +104,18 @@ class HyperparameterTuner:
             """
         print('Running objective function')
         parameters = {
-            'optim_name': trial.suggest_categorical('optim_name', ['AdamW', 'RMSprop']),
+            # 'optim_name': trial.suggest_categorical('optim_name', ['AdamW', 'RMSprop']),
             # 'init_weights': trial.suggest_categorical('init_weights', ['kaiming', 'xavier']),
-            'lr': trial.suggest_float("lr", 1e-5, 1e-2, log=True),
+            'lr': trial.suggest_float("lr", 5e-4, 1e-3, log=True),
             # 'weighted_loss': trial.suggest_categorical('weighted_loss', ['gauss', 'lorentz', 'plain']),
             # 'blocks': trial.suggest_int('blocks', 4, 7),
             # 'channels': trial.suggest_int('channels', 4, 8),
             # 'dropout': trial.suggest_float("dropout", 0.1, 0.5),
             # 'nonlinear': trial.suggest_categorical('nonlinear', ['ReLU', 'LeakyReLU']),
             # 'nonlinearh': trial.suggest_categorical('nonlinearh', ['ReLU', 'LeakyReLU']),
-            'batch_size': trial.suggest_int('batch_size', 8, 128, step=8),
+            # 'batch_size': trial.suggest_int('batch_size', 8, 128, step=8),
             # 'L1': 0.0,
-            # 'optim_name': 'AdamW',
+            'optim_name': 'AdamW',
             'init_weights': 'kaiming',
             # 'lr': 0.00027760306206483,
             # 'L2': 0.0000148159971684519,
@@ -126,11 +126,12 @@ class HyperparameterTuner:
             'nonlinear': 'LeakyReLU',
             'nonlinearh': 'ReLU',
             'input_size': image_size,
-            # 'batch_size': 128,
+            'batch_size': 64,
         }
-        regularization = trial.suggest_categorical("regularization", ['L1', 'L2'])
+        # regularization = trial.suggest_categorical("regularization", ['L1', 'L2'])
+        regularization = 'L1'
         if regularization == 'L1':
-            parameters['L1'] = trial.suggest_float("L1", 1e-6, 1e-2, log=True)
+            parameters['L1'] = trial.suggest_float("L1", 5e-5, 1e-3, log=True)
             parameters['L2'] = 0.0
             trial.set_user_attr("L2", 0.0)
         else:
@@ -230,12 +231,12 @@ class HyperparameterTuner:
                       f"learning rate: {scheduler.get_last_lr()}, "
                       f" -- ({datetime.now().strftime('%H:%M:%S')})")
                 if trial is not None:
-                    trial.report(history[-1]['val pearson'], epoch)
+                    trial.report(history[-1]['val concordance'], epoch)
                     # Handle pruning based on the intermediate value.
                     if trial.should_prune():
                         raise optuna.exceptions.TrialPruned()
                 scheduler.step()
-                reduce_on_plateau.step(history[-1]['val loss'])
+                # reduce_on_plateau.step(history[-1]['val loss'])
         finally:
             print("Done.")
         return history[-1]['val concordance'], best_metric, model
