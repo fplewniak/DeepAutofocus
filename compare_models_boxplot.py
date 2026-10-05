@@ -44,23 +44,30 @@ def check_equal_nargs(arg1, arg2, parser, a):
 def get_params(argv):
     parser = argparse.ArgumentParser(description='Compare models.')
 
-    parser.add_argument('--data', metavar='STR', help='List of csv files containing prediction vs ground truth',
-                        type=str, required=True, nargs='+', action=required_length(1, 16))
+    parser.add_argument('--data', metavar='FILE', type=str,
+                        help='CSV file containing information about data to plot', required=True)
+    # parser.add_argument('--data', metavar='STR', help='List of csv files containing prediction vs ground truth',
+    #                     type=str, required=True, nargs='+', action=required_length(1, 16))
     parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default=None)
-    parser.add_argument('--legend', metavar='STR', help='Legend specification', type=str, nargs='+',
-                        action=equal_nargs('--data'))
+    # parser.add_argument('--legend', metavar='STR', help='Legend specification', type=str, nargs='+',
+    #                     action=equal_nargs('--data'))
     parser.add_argument('--savefig', metavar='FILE', help='Save plot to file', default=None)
     parser.add_argument('--violin', help='Plot violin plot instead of boxplot', default=False, action='store_true')
 
     a = parser.parse_args()
 
-    check_equal_nargs('--data', '--legend', parser, a)
+    # check_equal_nargs('--data', '--legend', parser, a)
 
-    return a.title, a.legend, a.data, a.savefig, a.violin
+    # return a.title, a.legend, a.data, a.savefig, a.violin
+    return a.title, a.data, a.savefig, a.violin
 
 
 if __name__ == '__main__':
-    title, legend, data_files, savefig, violin = get_params(sys.argv[1:])
+    # title, legend, data_files, savefig, violin = get_params(sys.argv[1:])
+    title, file_list, savefig, violin = get_params(sys.argv[1:])
+
+    files_df = pd.read_csv(file_list)
+    # print(files_df)
 
     fig, axis = plt.subplots(nrows=1, ncols=1)
 
@@ -68,13 +75,18 @@ if __name__ == '__main__':
         fig.suptitle(title)
 
     data_df = None
+    legend = []
 
-    for i, data_file in enumerate(data_files):
+    # for i, data_file in enumerate(data_files):
+    for row in files_df.iterrows():
+        data_file = row[1]['filename']
+        # legend = row[1]['legend']
+        legend.append(row[1]['legend'])
         if data_df is None:
-            data_df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', legend[i]])
+            data_df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', legend[-1]])
             data_df = data_df.drop(['pred', 'gt'], axis=1)
         else:
-            df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', legend[i]])[['filename', legend[i]]]
+            df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', legend[-1]])[['filename', legend[-1]]]
             data_df = pd.merge(data_df, df, on="filename")
 
     if violin:
