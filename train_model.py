@@ -60,14 +60,16 @@ def get_params(argv):
                         choices=['ReLU', 'LeakyReLU', 'ELU', 'GELU', 'PReLU'], default='ReLU')
     parser.add_argument('--channels', metavar='INT', help='Number of channels', default=3, type=int)
     parser.add_argument('--dropout', metavar='FLOAT', help='Dropout value', type=float, default=0.5)
-    parser.add_argument('--warmup', help='toggle warm-up scheduler', action='store_true')
+    # parser.add_argument('--warmup', help='toggle warm-up scheduler', action='store_true')
+    parser.add_argument('--warmup', help='Warm-up scheduler number of epochs', type=int, default=0)
     parser.add_argument('--period', metavar='INT', help='Cosine LR period', default=30, type=int)
+    parser.add_argument('--logdir', metavar='DIR', help='Tensorboard log directory', default=None)
 
     a = parser.parse_args()
 
     return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.weight_decay, a.crop, a.image_size, a.nonlinear,
             a.nonlinearh, a.lambda1, a.lambda2, a.savefig, a.title, a.weighted_loss, a.freeze, a.filelist,
-            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period)
+            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period, a.logdir)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn,
@@ -126,7 +128,7 @@ def fix_filename(filename):
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop, image_size, nonlinear, nonlinearh,
      lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels, dropout,
-     warmup, period) = get_params(sys.argv[1:])
+     warmup, period, logdir) = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -239,13 +241,13 @@ if __name__ == '__main__':
     # scheduler = StepLR(optimizer, step_size=10, gamma=0.8, last_epoch=-1)
     scheduler = CosineAnnealingLR(optimizer, period, last_epoch=-1)
     if warmup:
-            warmup_scheduler = LinearLR(optimizer, start_factor=0.01, end_factor=1.0, total_iters=5)
-            scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[5])
-    reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
+            warmup_scheduler = LinearLR(optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup)
+            scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[warmup])
+    # reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
 
     history = []
 
-    writer = SummaryWriter()
+    writer = SummaryWriter(log_dir=logdir)
 
 
     try:
@@ -277,6 +279,7 @@ if __name__ == '__main__':
                                {'Training': history[-1]['concordance'],
                                 'Validation': history[-1]['val concordance'], 'Best': best_metric},
                                epoch + 1)
+            writer.add_scalar('learning rate', scheduler.get_last_lr()[-1], epoch + 1)
 
             # Log the histogram of the model's weights
             for name, param in model.blocks.named_parameters():
