@@ -272,8 +272,8 @@ if __name__ == '__main__':
                   f"learning rate: {scheduler.get_last_lr()}, "
                   f" -- ({datetime.now().strftime('%H:%M:%S')})")
             writer.add_scalars('Loss',
-                               {'Training Loss': history[-1]['train loss'],
-                                'Validation Loss': history[-1]['val loss'], 'Best': min_val_loss},
+                               {'Training': history[-1]['train loss'],
+                                'Validation': history[-1]['val loss'], 'Best': min_val_loss},
                                epoch + 1)
             writer.add_scalars('Concordance.',
                                {'Training': history[-1]['concordance'],
