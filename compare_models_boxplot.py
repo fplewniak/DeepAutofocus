@@ -83,10 +83,10 @@ if __name__ == '__main__':
         # legend = row[1]['legend']
         legend.append(row[1]['legend'])
         if data_df is None:
-            data_df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', legend[-1]])
+            data_df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', 'FOV', legend[-1]])
             data_df = data_df.drop(['pred', 'gt'], axis=1)
         else:
-            df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', legend[-1]])[['filename', legend[-1]]]
+            df = pd.read_csv(data_file, sep=',', header=0, names=['pred', 'gt', 'filename', 'FOV', legend[-1]])[['filename', legend[-1]]]
             data_df = pd.merge(data_df, df, on="filename")
 
     if violin:

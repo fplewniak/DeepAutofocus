@@ -29,10 +29,11 @@ def get_params(argv):
     parser.add_argument('--savefig', metavar='FILE', help='Save plot to file', default=None)
     parser.add_argument('--weighted_loss', metavar='STR', help='weighting loss', choices=['gauss', 'lorentz', 'plain'],
                         default=None)
+    parser.add_argument('--highlight', metavar='FILE', help='File with names of FOVs to highlight', default=None)
 
     a = parser.parse_args()
 
-    return a.model, a.batch_size, a.image_size, a.title, a.gt, a.crop, a.out_stats, a.out_data, a.savefig, a.weighted_loss
+    return a.model, a.batch_size, a.image_size, a.title, a.gt, a.crop, a.out_stats, a.out_data, a.savefig, a.weighted_loss, a.highlight
 
 def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
@@ -55,8 +56,11 @@ def test_loop(test_loader, model, loss_fn, device, name):
 
 if __name__ == '__main__':
     (model_name, batch_size, image_size, title, ground_truth_file, crop,
-     out_stats, out_data, savefig, weighted_loss) = get_params(sys.argv[1:])
+     out_stats, out_data, savefig, weighted_loss, highlight) = get_params(sys.argv[1:])
     print(out_data)
+
+    highlight_list = [line.strip() for line in open(highlight) if line.strip()]
+    print(highlight_list)
 
     multiprocessing.set_start_method('fork')
 
@@ -100,7 +104,7 @@ if __name__ == '__main__':
     positions = {}
 
     comparison = test_loop(test_loader, model, criterion, device, 'Evaluation')
-    gt_vs_pred_test = pd.DataFrame([[p.item(), gt.item(), f] for p, gt, f in comparison], columns=['pred', 'gt', 'filename'])
+    gt_vs_pred_test = pd.DataFrame([[p.item(), gt.item(), f, re.findall(r'(\d+-Pos\d\d\d_\d\d\d)', f)[0]] for p, gt, f in comparison], columns=['pred', 'gt', 'filename', 'FOV'])
     gt_vs_pred_test['error'] = gt_vs_pred_test['pred'] - gt_vs_pred_test['gt']
 
     if out_data is not None:
@@ -126,7 +130,9 @@ if __name__ == '__main__':
     axes[0].set(xlim=(-8, 8), ylim=(-8, 8))
     axes[0].axline((0, 0), slope=1, linestyle='--', color='k')
     # gt_vs_pred_test.plot.scatter('gt', 'pred', ax=axes[0], grid=True, markersize=1.5, alpha=0.3)
-    axes[0].plot('gt', 'pred', 'b.', markersize=2, alpha=0.3, data=gt_vs_pred_test)
+    mask = gt_vs_pred_test['FOV'].isin(highlight_list)
+    axes[0].plot('gt', 'pred', 'r.', markersize=2, alpha=0.8, data=gt_vs_pred_test.loc[mask])
+    axes[0].plot('gt', 'pred', 'b.', markersize=2, alpha=0.3, data=gt_vs_pred_test.loc[~mask])
     axes[0].grid(visible=True, axis='both', which='major')
     # axes[0].set_aspect('equal', adjustable='datalim', anchor='S')
     axes[0].set_aspect('equal', anchor='S')
@@ -138,7 +144,8 @@ if __name__ == '__main__':
     axes[1].plot('gt', 'error_quant5', 'k:', data=stats_df, alpha=0.3)
     axes[1].plot('gt', 'error_quant95', 'k:', data=stats_df, alpha=0.3)
     axes[1].fill_between('gt', 'error_quant5', 'error_quant95', alpha=0.2, data=stats_df)
-    axes[1].plot( 'gt', 'error', 'b.', markersize=1, data=gt_vs_pred_test, alpha=0.1)
+    axes[1].plot( 'gt', 'error', 'r.', markersize=1, data=gt_vs_pred_test.loc[mask], alpha=0.8)
+    axes[1].plot( 'gt', 'error', 'b.', markersize=1, data=gt_vs_pred_test.loc[~mask], alpha=0.1)
     # axes[1].legend(['quant 5%', 'median', 'quant 95%'])
     # axes[1].legend(['median'])
     axes[1].grid(visible=True, axis='both', which='major')
