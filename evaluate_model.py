@@ -60,8 +60,11 @@ if __name__ == '__main__':
      out_stats, out_data, savefig, weighted_loss, highlight, rgb) = get_params(sys.argv[1:])
     print(out_data)
 
-    highlight_list = [line.strip() for line in open(highlight) if line.strip()]
-    print(highlight_list)
+    if highlight:
+        highlight_list = [line.strip() for line in open(highlight) if line.strip()]
+        print(highlight_list)
+    else:
+        highlight_list = []
 
     multiprocessing.set_start_method('fork')
 
