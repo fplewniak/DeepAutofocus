@@ -5,8 +5,11 @@ import sys
 
 import numpy as np
 import pandas as pd
+import polars
 import torch
 from torch import nn, optim
+from torchmetrics import MetricCollection, ConcordanceCorrCoef, MeanAbsoluteError, NormalizedRootMeanSquaredError, \
+    R2Score
 from torchvision import models
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
@@ -41,16 +44,33 @@ def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
     test_loss = 0.0
     comparison = []
+    metrics = MetricCollection({'Concordance': ConcordanceCorrCoef(),
+                                'MeanAbsoluteError': MeanAbsoluteError(),
+                                'NormRootMeanSquare': NormalizedRootMeanSquaredError(normalization='std'),
+                                'R_squared': R2Score(),
+                                }).to(device)
     with torch.no_grad():
         for images, labels, filenames in test_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = (torch.squeeze(model(images)))
             comparison += list(zip(outputs, labels, filenames))
+            metrics.update(outputs, labels)
             loss = loss_fn(outputs, labels)
             test_loss += loss.item()
 
     avg_test_loss = test_loss / len(test_loader)
-    print(f'{name} average loss: {avg_test_loss}')
+    print('####################')
+    print(f'{name}')
+    print('####################')
+    stats = {'Average loss': avg_test_loss}
+    for (k, v) in metrics.compute().items():
+        stats[k] = v
+    # print(f'Average loss:\t{avg_test_loss}')
+    # for (k, v) in metrics.compute().items():
+    #     print(f'{k}:\t{v.item()}')
+    # print('====================')
+    table = polars.DataFrame(stats)
+    print(table)
 
     return comparison
 
