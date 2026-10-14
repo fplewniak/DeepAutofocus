@@ -24,13 +24,14 @@ from models.LaplacianBlocks import LaplacianBlocks
 from models.ScharrNet import ScharrNet
 from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
+from models.large.ResNet18_regression import ResNet18Model
 
 
 def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks'], default='SobelNet'),
+                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet18'], default='LaplacianNet'),
     parser.add_argument('--blocks', metavar='INT', help='number of blocks', type=int, default=3)
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
@@ -64,12 +65,13 @@ def get_params(argv):
     parser.add_argument('--warmup', help='Warm-up scheduler number of epochs', type=int, default=0)
     parser.add_argument('--period', metavar='INT', help='Cosine LR period', default=30, type=int)
     parser.add_argument('--logdir', metavar='DIR', help='Tensorboard log directory', default=None)
+    parser.add_argument('--rgb', help='toggle repeat stacks as RGB channels', action='store_true')
 
     a = parser.parse_args()
 
     return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.weight_decay, a.crop, a.image_size, a.nonlinear,
             a.nonlinearh, a.lambda1, a.lambda2, a.savefig, a.title, a.weighted_loss, a.freeze, a.filelist,
-            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period, a.logdir)
+            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period, a.logdir, a.rgb)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn,
@@ -128,7 +130,7 @@ def fix_filename(filename):
 if __name__ == '__main__':
     (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop, image_size, nonlinear, nonlinearh,
      lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels, dropout,
-     warmup, period, logdir) = get_params(sys.argv[1:])
+     warmup, period, logdir, rgb) = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -143,14 +145,22 @@ if __name__ == '__main__':
 
     image_sizing = transforms.CenterCrop((image_size, image_size)) if crop else v2.Resize(image_size)
 
-    transform = transforms.Compose(
+    if rgb:
+        transform = transforms.Compose(
             [transforms.ToTensor(),
              v2.ToDtype(torch.float, scale=True),
              v2.functional.autocontrast,
              # transforms.Normalize((0.5,), (0.5,)),
-             # transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
              image_sizing
              # models.ViT_B_16_Weights.DEFAULT.transforms()
+             ])
+    else:
+        transform = transforms.Compose(
+            [transforms.ToTensor(),
+             v2.ToDtype(torch.float, scale=True),
+             v2.functional.autocontrast,
+             image_sizing
              ])
 
     all_df = pd.read_csv(filelist, header=0, names=['filename', 'deltaz'])
@@ -215,6 +225,8 @@ if __name__ == '__main__':
                                  nonlinear=nonlinear, nonlinearh=nonlinearh, dropout=dropout).to(device)
         case 'LaplacianBlocks':
             model = LaplacianBlocks(init_weights, n_blocks, nonlinear, nonlinearh, n_channels).to(device)
+        case 'ResNet18':
+            model = ResNet18Model().to(device)
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 
@@ -249,6 +261,7 @@ if __name__ == '__main__':
 
     writer = SummaryWriter(log_dir=logdir)
 
+    print(f"{datetime.now().strftime('%H:%M:%S')}")
 
     try:
         min_val_loss = torch.finfo(torch.float).max

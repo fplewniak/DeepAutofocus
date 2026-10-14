@@ -30,9 +30,12 @@ def get_params(argv):
     parser.add_argument('--title', metavar='STR', help='Plot title', type=str, default='')
     parser.add_argument('--weighted_loss', metavar='STR', help='weighting loss', choices=['gauss', 'lorentz', 'plain'],
                         default=None)
+    parser.add_argument('--rgb', help='toggle repeat stacks as RGB channels', action='store_true')
+
     argscope = parser.parse_args()
 
-    return argscope.model, argscope.batch_size, argscope.crop, argscope.image_size, argscope.title, argscope.filelist, argscope.weighted_loss
+    return (argscope.model, argscope.batch_size, argscope.crop, argscope.image_size, argscope.title, argscope.filelist,
+            argscope.weighted_loss, argscope.rgb)
 
 def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
@@ -52,7 +55,7 @@ def test_loop(test_loader, model, loss_fn, device, name):
     return comparison
 
 if __name__ == '__main__':
-    model_name, batch_size, crop, image_size, title, filelist, weighted_loss= get_params(sys.argv[1:])
+    model_name, batch_size, crop, image_size, title, filelist, weighted_loss, rgb = get_params(sys.argv[1:])
 
     multiprocessing.set_start_method('fork')
 
@@ -65,18 +68,26 @@ if __name__ == '__main__':
 
     image_sizing = transforms.CenterCrop((image_size, image_size)) if crop else v2.Resize(image_size)
 
-    transform = transforms.Compose(
+    if rgb:
+        transform = transforms.Compose(
             [transforms.ToTensor(),
              v2.ToDtype(torch.float, scale=True),
              v2.functional.autocontrast,
              # transforms.Normalize((0.5,), (0.5,)),
-             # transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+             transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
              image_sizing
              # models.ViT_B_16_Weights.DEFAULT.transforms()
              ])
+    else:
+        transform = transforms.Compose(
+            [transforms.ToTensor(),
+             v2.ToDtype(torch.float, scale=True),
+             v2.functional.autocontrast,
+             image_sizing
+             ])
 
     all_df = pd.read_csv(filelist, header=0, names=['filename', 'deltaz'])
-    print(all_df)
+    # print(all_df)
     group_indices = np.arange(len(all_df)) // 61
     unique_groups = np.unique(group_indices)
     np.random.seed(42)  # For reproducibility
@@ -154,15 +165,15 @@ if __name__ == '__main__':
     comparison = test_loop(train_loader, model, criterion, device, 'Training')
     gt_vs_pred_train = pd.DataFrame([[p.item(), gt.item(), f] for p, gt, f in comparison], columns=['pred', 'gt', 'filename'])
     gt_vs_pred_train.replace(to_replace=r'.*(Pos\d+).*', value=r'\1', regex=True)
-    print(gt_vs_pred_train)
+    # print(gt_vs_pred_train)
 
     comparison = test_loop(val_loader, model, criterion, device, 'Validation')
     gt_vs_pred_val = pd.DataFrame([[p.item(), gt.item(), f] for p, gt, f in comparison], columns=['pred', 'gt', 'filename'])
-    print(gt_vs_pred_val)
+    # print(gt_vs_pred_val)
 
     comparison = test_loop(test_loader, model, criterion, device, 'Test')
     gt_vs_pred_test = pd.DataFrame([[p.item(), gt.item(), f] for p, gt, f in comparison], columns=['pred', 'gt', 'filename'])
-    print(gt_vs_pred_test)
+    # print(gt_vs_pred_test)
 
     fig, axes = plt.subplots(nrows=1, ncols=3)
     if title is None:

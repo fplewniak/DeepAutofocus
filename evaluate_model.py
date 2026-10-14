@@ -30,10 +30,11 @@ def get_params(argv):
     parser.add_argument('--weighted_loss', metavar='STR', help='weighting loss', choices=['gauss', 'lorentz', 'plain'],
                         default=None)
     parser.add_argument('--highlight', metavar='FILE', help='File with names of FOVs to highlight', default=None)
+    parser.add_argument('--rgb', help='toggle repeat stacks as RGB channels', action='store_true')
 
     a = parser.parse_args()
 
-    return a.model, a.batch_size, a.image_size, a.title, a.gt, a.crop, a.out_stats, a.out_data, a.savefig, a.weighted_loss, a.highlight
+    return a.model, a.batch_size, a.image_size, a.title, a.gt, a.crop, a.out_stats, a.out_data, a.savefig, a.weighted_loss, a.highlight, a.rgb
 
 def test_loop(test_loader, model, loss_fn, device, name):
     model.eval()
@@ -56,7 +57,7 @@ def test_loop(test_loader, model, loss_fn, device, name):
 
 if __name__ == '__main__':
     (model_name, batch_size, image_size, title, ground_truth_file, crop,
-     out_stats, out_data, savefig, weighted_loss, highlight) = get_params(sys.argv[1:])
+     out_stats, out_data, savefig, weighted_loss, highlight, rgb) = get_params(sys.argv[1:])
     print(out_data)
 
     highlight_list = [line.strip() for line in open(highlight) if line.strip()]
@@ -73,15 +74,23 @@ if __name__ == '__main__':
 
     image_sizing = transforms.CenterCrop((image_size, image_size)) if crop else v2.Resize(image_size)
 
-    transform = transforms.Compose(
-            [transforms.ToTensor(),
-             v2.ToDtype(torch.float, scale=True),
-             v2.functional.autocontrast,
-             # transforms.Normalize((0.5,), (0.5,)),
-             # transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
-             image_sizing
-             # models.ViT_B_16_Weights.DEFAULT.transforms()
-             ])
+    if rgb:
+        transform = transforms.Compose(
+                [transforms.ToTensor(),
+                 v2.ToDtype(torch.float, scale=True),
+                 v2.functional.autocontrast,
+                 # transforms.Normalize((0.5,), (0.5,)),
+                 transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+                 image_sizing
+                 # models.ViT_B_16_Weights.DEFAULT.transforms()
+                 ])
+    else:
+        transform = transforms.Compose(
+                [transforms.ToTensor(),
+                 v2.ToDtype(torch.float, scale=True),
+                 v2.functional.autocontrast,
+                 image_sizing
+                 ])
 
     test_df = pd.read_csv(ground_truth_file, header=0, names=['filename', 'deltaz', 'pos'])
 
