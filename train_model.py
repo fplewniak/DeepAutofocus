@@ -10,7 +10,8 @@ import pandas as pd
 import torch
 from torch import nn, optim
 from torch.optim.lr_scheduler import StepLR, LinearLR, SequentialLR, CosineAnnealingLR
-from torchmetrics import PearsonCorrCoef, ConcordanceCorrCoef
+from torchmetrics import PearsonCorrCoef, ConcordanceCorrCoef, MetricCollection, MeanAbsoluteError, \
+    NormalizedRootMeanSquaredError, R2Score
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -20,7 +21,9 @@ from datasets import FocusImageDataset
 from matplotlib import pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 
+from models import ResidualBlock
 from models.LaplacianBlocks import LaplacianBlocks
+from models.ResNet import ResNet
 from models.ScharrNet import ScharrNet
 from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
@@ -31,7 +34,7 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet18'], default='LaplacianNet'),
+                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet'], default='LaplacianNet'),
     parser.add_argument('--blocks', metavar='INT', help='number of blocks', type=int, default=3)
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
@@ -43,6 +46,7 @@ def get_params(argv):
     parser.add_argument('--epochs', metavar='INT', help='number of epochs', type=int, default=10)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
     parser.add_argument('--lr', metavar='FLOAT', help='learning rate', type=float, default=1e-3)
+    parser.add_argument('--start_factor', metavar='FLOAT', help='factor for lower bound of learning rate during warm-up', type=float, default=1e-2)
     parser.add_argument('--weight_decay', metavar='FLOAT', help='weight decay', type=float, default=0)
     parser.add_argument('--out', metavar='FILE', help='The output files prefix', default=None)
     parser.add_argument('--crop', help='toggle crop at the centre instead of resizing', action='store_true')
@@ -66,12 +70,14 @@ def get_params(argv):
     parser.add_argument('--period', metavar='INT', help='Cosine LR period', default=30, type=int)
     parser.add_argument('--logdir', metavar='DIR', help='Tensorboard log directory', default=None)
     parser.add_argument('--rgb', help='toggle repeat stacks as RGB channels', action='store_true')
+    parser.add_argument('--layers', help='numbers of residual blocks per layer', type=int, nargs=4, default=[2, 2, 2, 2])
+    parser.add_argument('--planes', help='numbers of planes in each resnet layer', type=int, nargs=4, default=[64, 128, 256, 512])
 
     a = parser.parse_args()
 
-    return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.weight_decay, a.crop, a.image_size, a.nonlinear,
+    return (a.model, a.epochs, a.batch_size, a.out, a.optim, a.lr, a.start_factor, a.weight_decay, a.crop, a.image_size, a.nonlinear,
             a.nonlinearh, a.lambda1, a.lambda2, a.savefig, a.title, a.weighted_loss, a.freeze, a.filelist,
-            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period, a.logdir, a.rgb)
+            a.init_weights, a.blocks, a.channels, a.dropout, a.warmup, a.period, a.logdir, a.rgb, a.layers, a.planes)
 
 
 def train_loop(training_loader, validation_loader, model, loss_fn,
@@ -118,7 +124,8 @@ def train_loop(training_loader, validation_loader, model, loss_fn,
         avg_val_loss = val_loss / len(validation_loader)
 
     return {'train loss': avg_train_loss, 'val loss': avg_val_loss,
-            'concordance': concordance.compute(), 'val concordance': val_concordance.compute()}
+            'concordance': concordance.compute(), 'val concordance': val_concordance.compute()
+            }
 
 
 def fix_filename(filename):
@@ -128,9 +135,11 @@ def fix_filename(filename):
 
 
 if __name__ == '__main__':
-    (model_name, n_epochs, batch_size, outprefix, optim_name, lr, weight_decay, crop, image_size, nonlinear, nonlinearh,
+    (model_name, n_epochs, batch_size, outprefix, optim_name, lr, start_factor, weight_decay, crop, image_size, nonlinear, nonlinearh,
      lambda1, lambda2, savefig, title, weighted_loss, freeze, filelist, init_weights, n_blocks, n_channels, dropout,
-     warmup, period, logdir, rgb) = get_params(sys.argv[1:])
+     warmup, period, logdir, rgb, layers, planes) = get_params(sys.argv[1:])
+
+    print(layers)
 
     multiprocessing.set_start_method('fork')
 
@@ -225,8 +234,8 @@ if __name__ == '__main__':
                                  nonlinear=nonlinear, nonlinearh=nonlinearh, dropout=dropout).to(device)
         case 'LaplacianBlocks':
             model = LaplacianBlocks(init_weights, n_blocks, nonlinear, nonlinearh, n_channels).to(device)
-        case 'ResNet18':
-            model = ResNet18Model().to(device)
+        case 'ResNet':
+            model = ResNet(ResidualBlock, layers, planes).to(device)
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 
@@ -253,7 +262,7 @@ if __name__ == '__main__':
     # scheduler = StepLR(optimizer, step_size=10, gamma=0.8, last_epoch=-1)
     scheduler = CosineAnnealingLR(optimizer, period, last_epoch=-1)
     if warmup:
-            warmup_scheduler = LinearLR(optimizer, start_factor=0.01, end_factor=1.0, total_iters=warmup)
+            warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, end_factor=1.0, total_iters=warmup)
             scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, scheduler], milestones=[warmup])
     # reduce_on_plateau = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
 
@@ -290,7 +299,8 @@ if __name__ == '__main__':
                                epoch + 1)
             writer.add_scalars('Concordance.',
                                {'Training': history[-1]['concordance'],
-                                'Validation': history[-1]['val concordance'], 'Best': best_metric},
+                                'Validation': history[-1]['val concordance'], 'Best': best_metric,
+                                },
                                epoch + 1)
             writer.add_scalar('learning rate', scheduler.get_last_lr()[-1], epoch + 1)
 

@@ -1,7 +1,7 @@
 import collections
 
 from torch import nn
-
+import torch.nn.functional as F
 
 class Nonlinear:
     layers = {
@@ -60,3 +60,56 @@ class ConvBlocks(nn.Module):
     def forward(self, x):
         x = self.blocks(x)
         return x
+
+class ResidualBlock(nn.Module):
+    """
+    Basic residual block for ResNet-18 and ResNet-34
+    This block consists of two 3x3 convolutional layers
+    with batch normalization and ReLU activation
+    """
+    expansion = 1  # Output channels multiplier
+
+    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+        super(ResidualBlock, self).__init__()
+
+        # First convolutional layer
+        self.conv1 = nn.Conv2d(in_channels, out_channels,
+                              kernel_size=3, stride=stride,
+                              padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+
+        # Second convolutional layer
+        self.conv2 = nn.Conv2d(out_channels, out_channels,
+                              kernel_size=3, stride=1,
+                              padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+
+        # Downsample layer for matching dimensions
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        # Store the input for the skip connection
+        identity = x
+
+        # First conv block: conv -> batch norm -> ReLU
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = F.relu(out)
+
+        # Second conv block: conv -> batch norm (no ReLU yet)
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        # Apply downsampling to identity if needed
+        # This handles cases where input and output dimensions differ
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        # The key ResNet operation: add the skip connection
+        out += identity
+
+        # Apply ReLU after the addition
+        out = F.relu(out)
+
+        return out
