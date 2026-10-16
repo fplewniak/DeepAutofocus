@@ -13,7 +13,7 @@ class ResNet(nn.Module):
     Can be configured for different depths (18, 34, 50, 101, 152)
     """
 
-    def __init__(self, block, layers=None, planes=None):
+    def __init__(self, block, layers=None, planes=None, input_size=None, batch_size=None):
         super(ResNet, self).__init__()
 
         if layers is None:
@@ -68,6 +68,9 @@ class ResNet(nn.Module):
         )
         self.dropout2d = nn.Dropout2d(0.1)
 
+        if input_size is not None:
+            dummy =  torch.ones(batch_size, 1, input_size, input_size)
+            self.forward(dummy)
         # Initialize weights properly
         self._initialize_weights()
 
