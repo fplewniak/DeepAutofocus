@@ -9,9 +9,8 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn, optim
-from torch.optim.lr_scheduler import StepLR, LinearLR, SequentialLR, CosineAnnealingLR
-from torchmetrics import PearsonCorrCoef, ConcordanceCorrCoef, MetricCollection, MeanAbsoluteError, \
-    NormalizedRootMeanSquaredError, R2Score
+from torch.optim.lr_scheduler import LinearLR, SequentialLR, CosineAnnealingLR
+from torchmetrics import ConcordanceCorrCoef
 from torchvision.transforms import transforms, v2
 from torch.utils.data import DataLoader
 
@@ -27,8 +26,6 @@ from models.ResNet import ResNet
 from models.ScharrNet import ScharrNet
 from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
-from models.large.ResNet18_regression import ResNet18Model
-
 
 def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
