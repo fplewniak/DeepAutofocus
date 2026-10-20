@@ -35,7 +35,8 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    channels = 1
+
+    input_channels = 1
 
     match model_name:
         case 'SobelNet':
@@ -48,11 +49,11 @@ if __name__ == '__main__':
             model = ResNet(ResidualBlock, layers, planes, input_size=image_size, batch_size=batch_size).to(device)
         case 'ResNet18Model':
             model = ResNet18Model().to(device)
-            channels = 3
+            input_channels = 3
         case _:
             raise NotImplementedError(f'Model {model_name} is not implemented')
 
     # summary(model, (batch_size, channels, image_size, image_size, ), depth=depth, device='cpu')
-    model_graph = draw_graph(model, input_size=(batch_size, channels, image_size, image_size), device='meta',
+    model_graph = draw_graph(model, input_size=(batch_size, input_channels, image_size, image_size), device='meta',
                              save_graph=True, filename=f'{model_name}', depth=depth,
                              hide_inner_tensors=True, hide_module_functions=False, roll=True, expand_nested=True)
