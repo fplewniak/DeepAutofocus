@@ -8,7 +8,7 @@ from Regression.ResNet18 import ResNet18Model
 from models import ResidualBlock
 from models.LaplacianBlocks import LaplacianBlocks
 from models.LaplacianNet import LaplacianNet
-from models.ResNet import ResNet
+from models.ResNet import ResNet, ResNetreg
 from models.SobelNet import SobelNet
 
 
@@ -16,7 +16,7 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Evaluate model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet', 'ResNet18Model' ], default='SobelNet')
+                        choices=['SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet', 'ResNet18Model', 'ResNetreg' ], default='SobelNet')
     parser.add_argument('--channels', metavar='INT', help='Number of channels', default=3, type=int)
     parser.add_argument('--blocks', metavar='INT', help='Number of blocks', default=2, type=int)
     parser.add_argument('--batch_size', metavar='INT', help='size of batch', type=int, default=16)
@@ -44,6 +44,8 @@ if __name__ == '__main__':
             model = LaplacianNet(n_blocks=blocks, channels=channels, input_size=image_size)
         case 'LaplacianBlocks':
             model = LaplacianBlocks(n_blocks=blocks, channels=channels).to(device)
+        case 'ResNetreg':
+            model = ResNetreg(block=ResidualBlock, layers=layers, planes=planes, input_size=image_size,).to(device)
         case 'ResNet':
             model = ResNet(ResidualBlock, layers, planes).to(device)
         case 'ResNet18Model':

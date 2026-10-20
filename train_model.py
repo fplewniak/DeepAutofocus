@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from models import ResidualBlock
 from models.LaplacianBlocks import LaplacianBlocks
-from models.ResNet import ResNet
+from models.ResNet import ResNet, ResNetreg
 from models.ScharrNet import ScharrNet
 from models.LaplacianNet import LaplacianNet
 from models.SobelNet import SobelNet
@@ -31,7 +31,7 @@ def get_params(argv):
     parser = argparse.ArgumentParser(description='Train model.')
 
     parser.add_argument('--model', metavar='STR', help='Model',
-                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet'], default='LaplacianNet'),
+                        choices=['ScharrNet', 'SobelNet', 'LaplacianNet', 'LaplacianBlocks', 'ResNet', 'ResNetreg'], default='LaplacianNet'),
     parser.add_argument('--blocks', metavar='INT', help='number of blocks', type=int, default=3)
     parser.add_argument('--filelist', metavar='STR', help='CSV file containing the list of image files and'
                                                           ' the corresponding ground-truth delta Z value separated with a comma',
@@ -231,6 +231,8 @@ if __name__ == '__main__':
                                  nonlinear=nonlinear, nonlinearh=nonlinearh, dropout=dropout).to(device)
         case 'LaplacianBlocks':
             model = LaplacianBlocks(init_weights, n_blocks, nonlinear, nonlinearh, n_channels).to(device)
+        case 'ResNetreg':
+            model = ResNetreg(ResidualBlock, layers, planes, dropout=dropout, nonlinear=nonlinear).to(device)
         case 'ResNet':
             model = ResNet(ResidualBlock, layers, planes).to(device)
         case _:
